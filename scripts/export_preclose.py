@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""S2 트레이딩 따라하기 · 장마감 전 동시호가 후보 익스포터.
+
+s2_candidates 의 [A] 신규 진입 후보(지지선 지정가, 근접 포함) 로직을 재사용해 daily_candidates 에 적재.
+홈 화면의 '오늘 동시호가 신규 매수 후보' 섹션 데이터.
+
+사용:
+  python export_preclose.py                 # 오늘(장중이면 실시간 스냅샷, 아니면 캐시 최신)
+  python export_preclose.py --date 2026-05-27   # 특정일(캐시 EOD) 기준 후보 적재
+  python export_preclose.py --dry-run       # Supabase 없이 후보만 출력
+env(적재): SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY(= sb_secret_ 키)
+"""
+from __future__ import annotations
+import argparse, os, sys, json
+from datetime import date, datetime
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]   # s2_method
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # scripts/ (notify)
+import s2_candidates as sc                     # noqa: E402
+from config import Config                       # noqa: E402
+from notify import telegram_send                # noqa: E402
+
+MKT = {"KOSPI": "KS", "KOSDAQ": "KQ"}
+
+
+def notify_preclose(target, rows):
+    reached = [r for r in rows if r["reached"]]
+    near = [r for r in rows if not r["reached"]]
+    lines = [f"📋 <b>[S2] {target} 동시호가 신규 매수 후보 {len(rows)}건</b>",
+             "15:20~15:30 동시호가에 '지지선 지정가' 매수주문을 제출하세요."]
+    if reached:
+        lines.append("● 지지선 도달(체결 예상):")
+        for r in reached[:10]:
+            lines.append(f"  · {r['name'][:6]} {r['order_price']:,}원 (포트 {r['port_pct']}%)")
+    if near:
+        lines.append("근접(더 내리면 체결): " + ", ".join(f"{r['name'][:6]}({r['drop_to_pct']:.1f}%)" for r in near[:12]))
+    if not rows:
+        lines.append("오늘 신규 진입 후보 없음.")
+    telegram_send("\n".join(lines))
+
+
+def build(target_date, live):
+    cfg = Config(); cfg.lookback_days = sc.WINDOW
+    px, nmap, mmap, target, live = sc.prepare(cfg, target_date, live)
+    positions, last_exit, cash, _ = sc.reconstruct(px, target, nmap, mmap, cfg, 5e8)
+    new_cand, _add, nav, _hv = sc.extract(px, target, positions, last_exit, cash, nmap, mmap, cfg)
+    now = datetime.now().isoformat()
+    rows = [dict(
+        d=str(target), ticker=c["tk"], kind="new", name=c["name"],
+        market=MKT.get(c["market"], c["market"]),
+        current_price=round(c["price"]), order_price=round(c["order"]),
+        port_pct=round(c["pct"], 2), ma120_above=bool(c["above"]),
+        prev_spike_bull=(None if c["bull"] is None else bool(c["bull"])),
+        stage=1, reached=bool(c["reached"]), drop_to_pct=round(c["drop_to"] * 100, 2),
+        snapshot_at=now,
+    ) for c in new_cand]
+    return str(target), rows
+
+
+def upsert(target, rows):
+    import urllib.request, urllib.parse, urllib.error
+    base = os.environ["SUPABASE_URL"].rstrip("/") + "/rest/v1"
+    key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+    H = {"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json",
+         "Prefer": "return=minimal"}
+
+    def req(method, path, body=None):
+        data = json.dumps(body).encode("utf-8") if body is not None else None
+        r = urllib.request.Request(base + path, data=data, method=method, headers=H)
+        try:
+            with urllib.request.urlopen(r, timeout=60) as resp:
+                resp.read()
+        except urllib.error.HTTPError as e:
+            raise SystemExit(f"[supabase] {method} {path} 실패 {e.code}: {e.read().decode()[:400]}")
+
+    req("DELETE", f"/daily_candidates?d=eq.{urllib.parse.quote(target)}&kind=eq.new")
+    if rows:
+        req("POST", "/daily_candidates", rows)
+    req("PATCH", "/meta?key=eq.last_preclose_at", {"value": datetime.now().isoformat()})
+    print(f"[supabase] daily_candidates 적재 완료 ({target}, 신규 후보 {len(rows)}건)")
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--date", default=None, help="기준일 YYYY-MM-DD (미입력=오늘)")
+    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--no-notify", action="store_true", help="텔레그램 알림 생략")
+    args = ap.parse_args()
+    Config()  # .env.local 로드(SUPABASE_*/TELEGRAM_* 환경변수 주입)
+    target_date = date.fromisoformat(args.date) if args.date else None
+    live = target_date is None
+    target, rows = build(target_date, live)
+    if args.dry_run:
+        print(f"[dry-run] {target} 신규 동시호가 후보 {len(rows)}건")
+        for r in rows[:30]:
+            reach = "●도달" if r["reached"] else f"{r['drop_to_pct']:.1f}%"
+            updown = "UP" if r["ma120_above"] else "DOWN"
+            print(f"  {r['name'][:6]:<8}{r['market']:<3}{r['ticker']:<8} 현재가 {r['current_price']:>9,} "
+                  f"주문가(지지선) {r['order_price']:>9,} {reach:>7} 포트{r['port_pct']}% {updown}")
+    else:
+        upsert(target, rows)
+        if not args.no_notify:
+            notify_preclose(target, rows)
+    print("DONE")
+
+
+if __name__ == "__main__":
+    main()

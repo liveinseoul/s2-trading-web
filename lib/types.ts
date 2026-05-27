@@ -1,0 +1,65 @@
+// Supabase 테이블 행 타입 (docs/02-data-model 과 일치)
+
+export type Market = "KS" | "KQ";
+
+export interface NavDaily {
+  d: string; nav: number; cash: number; stock_value: number;
+  leverage: number; dd_pct: number; n_positions: number;
+}
+
+export interface PositionSnapshot {
+  d: string; ticker: string; name: string; market: Market;
+  entry_date: string; buy_count: number; sell_count: number; qty: number;
+  avg_buy: number; last_close: number; eval_amount: number; eval_pnl: number;
+  ret_pct: number; port_pct: number | null;
+}
+
+export interface DailyCandidate {
+  d: string; ticker: string; kind: "new" | "add"; name: string; market: Market;
+  current_price: number; order_price: number; port_pct: number;
+  ma120_above: boolean; prev_spike_bull: boolean | null; stage: number;
+  reached: boolean; drop_to_pct: number | null; snapshot_at: string;
+}
+
+export type ExecAction =
+  | "buy_new" | "buy_add" | "sell_1" | "sell_2" | "sell_3" | "stop" | "newlow_stop";
+
+export interface Execution {
+  id: number; d: string; ticker: string; name: string; market: Market;
+  action: ExecAction; stage: number | null; fill_price: number; qty: number;
+  amount: number; port_pct: number | null; ma120_above: boolean | null;
+  prev_spike_bull: boolean | null; blocked_by_leverage: boolean;
+}
+
+export type OrderType = "buy_add" | "sell" | "stop" | "newlow_stop";
+
+export interface OrderPlan {
+  id: number; d: string; ticker: string; name: string; market: Market;
+  order_type: OrderType; stage: number | null; trigger_price: number;
+  qty: number; port_pct: number | null;
+  diff: "new" | "changed" | "keep" | "cancel"; note: string | null;
+}
+
+export interface Trade {
+  id: number; ticker: string; name: string; market: Market;
+  entry_date: string; exit_date: string | null; buy_count: number;
+  max_invested: number; proceeds: number | null; pnl: number | null;
+  ret_pct: number | null; holding_days: number | null;
+  exit_reason: string | null; status: "open" | "closed";
+}
+
+export interface TradeLeg {
+  id: number; trade_id: number; d: string; leg_type: string;
+  stage: number | null; price: number; qty: number; amount: number;
+  port_pct: number | null;
+}
+
+export interface DailyCount {
+  d: string; n_candidates: number; n_reached: number; n_bought: number; n_blocked: number;
+}
+
+export interface MonthlyStat {
+  month: string; num_trades: number; win_rate: number; avg_ret: number;
+  realized_pnl: number; nav_start: number; nav_end: number;
+  return_pct: number; mdd_pct: number;
+}

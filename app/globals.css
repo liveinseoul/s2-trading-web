@@ -1,0 +1,35 @@
+/* Pretendard (한글 가독·숫자 정렬) — @import 는 최상단이어야 함 */
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css");
+@import "tailwindcss";
+
+/* ── 디자인 토큰 (Tailwind v4 @theme) ──────────────────────────
+   ⚠ 한국식 색관례: 빨강=상승/이익/매수, 파랑=하락/손실. (미국과 반대) */
+@theme {
+  --color-up: #e03131;       /* 상승/이익/매수 */
+  --color-up-soft: #fff5f5;
+  --color-down: #1971c2;     /* 하락/손실 */
+  --color-down-soft: #e7f5ff;
+  --color-flat: #495057;
+  --color-accent: #1098ad;   /* 링크/버튼(상승·하락색과 충돌 회피, 청록) */
+  --color-warn: #f08c00;     /* 레버 미체결·주의 */
+
+  --color-bg: #ffffff;
+  --color-surface: #f8f9fa;
+  --color-borderc: #e9ecef;
+  --color-textc: #212529;
+  --color-muted: #868e96;
+
+  --font-sans: "Pretendard Variable", Pretendard, system-ui, sans-serif;
+}
+
+html { -webkit-text-size-adjust: 100%; }
+body {
+  background: var(--color-bg);
+  color: var(--color-textc);
+  font-family: var(--font-sans);
+  font-feature-settings: "tnum";          /* 숫자 자릿수 정렬 */
+  padding-bottom: 4.5rem;                  /* 모바일 하단 탭 여백 */
+}
+
+/* 숫자 강조 */
+.tnum { font-variant-numeric: tabular-nums; }
