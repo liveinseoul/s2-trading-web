@@ -30,6 +30,9 @@ body {
   font-feature-settings: "tnum";          /* 숫자 자릿수 정렬 */
   padding-bottom: 4.5rem;                  /* 모바일 하단 탭 여백 */
 }
+@media (min-width: 1024px) {                /* lg+: 상단 탭 사용 → 하단 여백 불필요 */
+  body { padding-bottom: 0; }
+}
 
 /* 숫자 강조 */
 .tnum { font-variant-numeric: tabular-nums; }

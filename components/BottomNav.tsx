@@ -12,7 +12,7 @@ const TABS = [
 export default function BottomNav() {
   const p = usePathname();
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-10 border-t border-[var(--color-borderc)] bg-bg">
+    <nav className="fixed bottom-0 left-0 right-0 z-10 border-t border-[var(--color-borderc)] bg-bg lg:hidden">
       <div className="mx-auto flex max-w-3xl">
         {TABS.map((t) => {
           const active = t.match(p);
