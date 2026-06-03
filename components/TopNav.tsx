@@ -7,7 +7,8 @@ const TABS = [
   { href: "/dashboard", label: "대시보드", match: (p: string) => p.startsWith("/dashboard") || p.startsWith("/month") },
   { href: "/stocks", label: "종목", match: (p: string) => p.startsWith("/stocks") || p.startsWith("/trades") },
   { href: "/rs96", label: "RS96+", match: (p: string) => p.startsWith("/rs96") },
-  { href: "/rules", label: "규칙", match: (p: string) => p.startsWith("/rules") },
+  { href: "/rules/s2", label: "규칙(S2)", match: (p: string) => p === "/rules/s2" || p === "/rules" },
+  { href: "/rules/rs96", label: "규칙(RS96+)", match: (p: string) => p === "/rules/rs96" },
 ];
 
 export default function TopNav() {

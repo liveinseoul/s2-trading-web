@@ -7,7 +7,7 @@ const TABS = [
   { href: "/dashboard", label: "대시보드", match: (p: string) => p.startsWith("/dashboard") },
   { href: "/stocks", label: "종목", match: (p: string) => p.startsWith("/stocks") || p.startsWith("/trades") },
   { href: "/rs96", label: "RS96+", match: (p: string) => p.startsWith("/rs96") },
-  { href: "/rules", label: "규칙", match: (p: string) => p.startsWith("/rules") },
+  { href: "/rules", label: "규칙", match: (p: string) => p.startsWith("/rules") },  // 모바일은 인덱스 → 두 시스템 선택
 ];
 
 export default function BottomNav() {

@@ -74,7 +74,7 @@ export interface RsTopWeekly {
   rs: number;
   comp_return: number | null;
   close: number | null;
-  mktcap_krw: number | null;
+  mktcap: number | null;        // KR=원, US=USD (market 따라 native currency)
   rank_in_week: number;
 }
 

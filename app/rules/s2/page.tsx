@@ -1,0 +1,48 @@
+import { Section } from "@/components/ui";
+
+export const revalidate = 3600;
+
+const RULES: { t: string; d: string }[] = [
+  { t: "진입 조건", d: "직전 60거래일 내 거래대금 ≥ 5,000억 스파이크 + 당일 종가 < 20일선 −20%(Envelope) + 거래대금 리셋(최종 매도 후 새 스파이크 필요)." },
+  { t: "매수 비중(사이징)", d: "진입가가 120일선 위면 NAV 15%, 아래면 7.5%. 직전 스파이크 봉이 음봉이면 ×0.8(12% / 6%)." },
+  { t: "추가매수", d: "직전 매수가 −10%마다 추가매수, 최대 3차. 1차와 동일 금액(정액)." },
+  { t: "분할매도", d: "평단 +3% / +5% / +7%에서 10% / 10% / 80% 매도." },
+  { t: "손절", d: "분할매도 한 단계가 체결되면 그 단계가를 손절가로 상향. 2차 매수 후엔 신저가 손절(직전 최저가 하향 시 종가 청산)." },
+  { t: "주문 실무", d: "1차 매수=마감 동시호가에 지지선 지정가. 2·3차 매수=직전매수가×0.9 감시주문. 매도·손절=감시주문." },
+  { t: "위험 관리", d: "레버리지 1.3배 상한(초과 매수 미실행). 기준자본 5억." },
+];
+
+export default function RulesPage() {
+  return (
+    <>
+      <h1 className="mb-3 text-lg font-bold">S2 매매 규칙</h1>
+      <Section title="규칙 요약">
+        <ul className="flex flex-col gap-3">
+          {RULES.map((r) => (
+            <li key={r.t}>
+              <div className="font-medium text-accent">{r.t}</div>
+              <div className="text-sm text-muted">{r.d}</div>
+            </li>
+          ))}
+        </ul>
+      </Section>
+
+      <Section title="검증 성과 (정직 공개)">
+        <ul className="flex flex-col gap-2 text-sm">
+          <li><b>7년(현재 유니버스, 무비용 모델)</b>: CAGR ~16% · MDD ~−6% · Calmar ~2.0 · 승률 ~90%.</li>
+          <li><b>12년 시점-정확(상폐 포함, 생존편향 제거)</b>: CAGR ~9% · Calmar ~0.7 — 장기 정직 하한.</li>
+          <li className="text-muted">두 수치 차이는 기간·생존편향 효과. 본 서비스 표시값은 무비용·0버퍼 모델(주문가 기준)로,
+            실제 결과는 슬리피지·수수료·거래세·체결 현실성으로 더 낮을 수 있음.</li>
+        </ul>
+      </Section>
+
+      <Section title="한계·주의">
+        <ul className="flex flex-col gap-2 text-sm text-muted">
+          <li>• 당일 −1% 손절(1차 매도일의 ~49%)은 장중 이벤트라 저녁 감시주문만으론 못 따라감 → 텔레그램 알림(Phase 2)으로 보완 예정.</li>
+          <li>• 모델 포트폴리오를 KRX 시세로 추적하며, 사용자 증권계좌와 연동되지 않음.</li>
+          <li>• 자본 규모가 커지면 거래대금 대비 슬리피지·체결 현실성 한계가 커짐.</li>
+        </ul>
+      </Section>
+    </>
+  );
+}
