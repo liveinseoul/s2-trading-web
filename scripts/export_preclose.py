@@ -19,6 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]   # s2_method
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # scripts/ (notify)
+os.chdir(ROOT)                                            # 상대경로(stock_cache.db, .env.local)가 항상 s2_method 루트 기준
 import s2_candidates as sc                     # noqa: E402
 from config import Config                       # noqa: E402
 from notify import telegram_send                # noqa: E402
@@ -42,9 +43,28 @@ def notify_preclose(target, rows):
     telegram_send("\n".join(lines))
 
 
+def notify_preclose_fail(today_str, last_cached_str):
+    """KRX 라이브 스냅샷 실패 시 — 폴백 데이터로 동일 메시지를 반복 발송하지 않고 실패를 명시 통보."""
+    lines = [
+        f"⚠️ <b>[S2] {today_str} KRX 데이터 갱신 실패</b>",
+        "KRX 로그인이 거부되어 오늘 시세를 받지 못했습니다. 후보 산출을 건너뜁니다.",
+        "",
+        "📌 점검 항목:",
+        "1) <a href='https://data.krx.co.kr'>data.krx.co.kr</a> 직접 로그인으로 자격증명 확인",
+        "2) 비밀번호 만료/계정 잠금 여부 점검",
+        "3) 필요 시 .env.local 의 KRX_PW 갱신 후 main.py 1회 수동 실행",
+        "",
+        f"마지막 캐시 갱신일: {last_cached_str}",
+        "복구되면 다음 거래일 15:10 자동 알림이 정상 발송됩니다.",
+    ]
+    telegram_send("\n".join(lines))
+
+
 def build(target_date, live):
     cfg = Config(); cfg.lookback_days = sc.WINDOW
-    px, nmap, mmap, target, live = sc.prepare(cfg, target_date, live)
+    requested_live = bool(live)                     # 폴백 감지용: 호출 시점에 live 모드를 요청했는지
+    px, nmap, mmap, target, live_out = sc.prepare(cfg, target_date, live)
+    fallback = requested_live and not live_out      # 라이브 요청 → 캐시로 떨어졌으면 KRX 실패
     positions, last_exit, cash, _ = sc.reconstruct(px, target, nmap, mmap, cfg, 5e8)
     new_cand, _add, nav, _hv = sc.extract(px, target, positions, last_exit, cash, nmap, mmap, cfg)
     now = datetime.now().isoformat()
@@ -57,7 +77,7 @@ def build(target_date, live):
         stage=1, reached=bool(c["reached"]), drop_to_pct=round(c["drop_to"] * 100, 2),
         snapshot_at=now,
     ) for c in new_cand]
-    return str(target), rows
+    return str(target), rows, fallback
 
 
 def upsert(target, rows):
@@ -92,14 +112,21 @@ def main():
     Config()  # .env.local 로드(SUPABASE_*/TELEGRAM_* 환경변수 주입)
     target_date = date.fromisoformat(args.date) if args.date else None
     live = target_date is None
-    target, rows = build(target_date, live)
+    target, rows, fallback = build(target_date, live)
     if args.dry_run:
-        print(f"[dry-run] {target} 신규 동시호가 후보 {len(rows)}건")
+        note = " [⚠ KRX 라이브 실패 → 캐시 폴백]" if fallback else ""
+        print(f"[dry-run] {target} 신규 동시호가 후보 {len(rows)}건{note}")
         for r in rows[:30]:
             reach = "●도달" if r["reached"] else f"{r['drop_to_pct']:.1f}%"
             updown = "UP" if r["ma120_above"] else "DOWN"
             print(f"  {r['name'][:6]:<8}{r['market']:<3}{r['ticker']:<8} 현재가 {r['current_price']:>9,} "
                   f"주문가(지지선) {r['order_price']:>9,} {reach:>7} 포트{r['port_pct']}% {updown}")
+    elif fallback:
+        # KRX 실패 → 폴백 데이터는 적재·정상 알림 모두 생략, 실패 알림만 발송
+        today_str = str(date.today())
+        print(f"[KRX 실패] 라이브 스냅샷 실패 → 캐시({target})로 폴백. Supabase 적재·정상 알림 생략, 실패 알림 발송.")
+        if not args.no_notify:
+            notify_preclose_fail(today_str, target)
     else:
         upsert(target, rows)
         if not args.no_notify:
