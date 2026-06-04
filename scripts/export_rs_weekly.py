@@ -37,6 +37,37 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+
+def _normalize_weekly_cache(weekly_cache):
+    """weekly_cache 의 각 close series 인덱스를 그 주의 금요일(W-FRI)로 정규화.
+
+    KR 은 월/금이 섞이고 US 는 월~목이 종목별로 다른 요일에 떨어진다.
+    그대로 union 하면 5/04·5/11 같은 비금요일이 별도 주차로 보임.
+    같은 주의 여러 timestamp 는 dedup keep='last' (시간상 늦은 값 우선).
+    """
+    norm = {}
+    for tk, v in weekly_cache.items():
+        s = get_close_series(v)
+        if s is None or len(s) == 0:
+            continue
+        # 그 주의 금요일 = ts + (4 - weekday) 일 (월=0..금=4..일=6)
+        new_idx = s.index + pd.to_timedelta(4 - s.index.weekday.values, unit="D")
+        s2 = pd.Series(s.values, index=pd.DatetimeIndex(new_idx))
+        s2 = s2[~s2.index.duplicated(keep="last")].sort_index()
+        norm[tk] = {"close": s2}
+    return norm
+
+
+def _normalize_rs_table(rs_table):
+    """rs_table 인덱스도 같은 W-FRI 정규화 — get_threshold_row 캐시 적중률 유지."""
+    if rs_table is None or len(rs_table) == 0:
+        return rs_table
+    new_idx = rs_table.index + pd.to_timedelta(4 - rs_table.index.weekday, unit="D")
+    rs2 = rs_table.copy()
+    rs2.index = pd.DatetimeIndex(new_idx)
+    rs2 = rs2[~rs2.index.duplicated(keep="last")].sort_index()
+    return rs2
+
 ROOT = Path(__file__).resolve().parents[2]   # s2_method
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -196,20 +227,21 @@ def fetch_market(market, weeks_back):
     print(f"\n[{market}] 데이터 로드  (시총 상위 {mktcap_top}%"
           + (f" + 최소 {mktcap_min/1e8:,.0f}억" if mktcap_min and market == 'KR' else "")
           + ")")
-    rs_table = load_rs_table(market)
-    weekly_cache = load_weekly_cache(market)
+    rs_table = _normalize_rs_table(load_rs_table(market))
+    weekly_cache = _normalize_weekly_cache(load_weekly_cache(market))
     ticker_names = load_ticker_names(market)
 
     if market == "KR":
         mktcap_cache = load_mktcap_cache("KR")
         us_shares = {}
         print(f"  weekly_cache: {len(weekly_cache):,}개 · RS 테이블: {len(rs_table):,}주 · "
-              f"이름 매핑: {len(ticker_names):,}개 · 시총 캐시: {len(mktcap_cache):,}개")
+              f"이름 매핑: {len(ticker_names):,}개 · 시총 캐시: {len(mktcap_cache):,}개  "
+              f"(인덱스 W-FRI 정규화 완료)")
     else:
         mktcap_cache = {}
         us_shares = load_us_shares()
         print(f"  weekly_cache: {len(weekly_cache):,}개 · RS 테이블: {len(rs_table):,}주 · "
-              f"이름 매핑: {len(ticker_names):,}개")
+              f"이름 매핑: {len(ticker_names):,}개  (인덱스 W-FRI 정규화 완료)")
 
     mktcap_lookup = make_mktcap_lookup(market, mktcap_cache, us_shares)
 
@@ -275,26 +307,16 @@ def _chunk(rows, n=500):
 def upsert_supabase(top_rows, hist_rows, rs96_tickers_by_market):
     req = _supabase_client()
 
-    weeks_per_market = {}
-    for r in top_rows:
-        weeks_per_market.setdefault(r["market"], set()).add(r["week_date"])
-    for mk, ws in weeks_per_market.items():
-        in_w = ",".join(f'"{w}"' for w in sorted(ws))
-        req("DELETE",
-            f"/rs_top_weekly?market=eq.{urllib.parse.quote(mk)}"
-            f"&week_date=in.({urllib.parse.quote(in_w)})")
+    # 시장 전체 삭제 후 재적재 — 옛 stale 주차(예: 월요일 timestamp) row 동시 정리.
+    markets = set(rs96_tickers_by_market.keys()) | {r["market"] for r in top_rows}
+    for mk in markets:
+        req("DELETE", f"/rs_top_weekly?market=eq.{urllib.parse.quote(mk)}")
+        req("DELETE", f"/rs_history_weekly?market=eq.{urllib.parse.quote(mk)}")
+
     for c in _chunk(top_rows):
         req("POST", "/rs_top_weekly", c)
     print(f"[supabase] rs_top_weekly {len(top_rows):,}건 적재 완료")
 
-    for mk, tks in rs96_tickers_by_market.items():
-        if not tks:
-            continue
-        for tk_chunk in _chunk(list(tks), 200):
-            in_t = ",".join(f'"{t}"' for t in tk_chunk)
-            req("DELETE",
-                f"/rs_history_weekly?market=eq.{urllib.parse.quote(mk)}"
-                f"&ticker=in.({urllib.parse.quote(in_t)})")
     for c in _chunk(hist_rows):
         req("POST", "/rs_history_weekly", c)
     print(f"[supabase] rs_history_weekly {len(hist_rows):,}건 적재 완료")
