@@ -195,9 +195,12 @@ export default async function RsScreen({
                             href={`/rs96/${market}/${encodeURIComponent(r.ticker)}`}
                             className="font-medium text-textc hover:text-accent"
                           >
-                            {r.name || r.ticker}
+                            {r.name_en || r.name || r.ticker}
                           </Link>
                           <span className="ml-2 text-[11px] text-muted">{r.ticker}</span>
+                          {market === "JP" && r.name_en && r.name && r.name !== r.name_en && (
+                            <div className="text-[11px] text-muted">{r.name}</div>
+                          )}
                         </td>
                         <td className="font-bold text-accent">{r.rs}</td>
                         <td className={signClass(r.comp_return ? r.comp_return * 100 : null)}>

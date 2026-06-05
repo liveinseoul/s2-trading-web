@@ -70,11 +70,12 @@ export interface RsTopWeekly {
   market: RsMarket;
   week_date: string;
   ticker: string;
-  name: string | null;
+  name: string | null;          // 원어 (KR: 한글, US: 영문, JP: 일본어)
+  name_en: string | null;       // 외국어 표기 (주로 JP — 영문 또는 한국어 번역)
   rs: number;
   comp_return: number | null;
   close: number | null;
-  mktcap: number | null;        // KR=원, US=USD (market 따라 native currency)
+  mktcap: number | null;        // KR=원, US=USD, JP=¥ (native currency)
   rank_in_week: number;
 }
 

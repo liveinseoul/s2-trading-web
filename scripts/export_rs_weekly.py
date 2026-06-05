@@ -131,6 +131,8 @@ US_SHARES_PKL = "_bt_shares_us.pkl"
 JP_SHARES_PKL = "_bt_shares_jp.pkl"
 JP_WEEKLY_CACHE = "_jp_weekly_cache.pkl"
 JP_TICKER_CACHE = "_jp_ticker_cache.pkl"
+JP_NAMES_EN_PKL = "_jp_names_en.pkl"     # yfinance longName (정식 영문, 부분 커버)
+JP_NAMES_KO_PKL = "_jp_names_ko.pkl"     # deep_translator JA→KO 번역 (나머지)
 
 
 def _load_pkl(path):
@@ -159,6 +161,26 @@ def load_jp_ticker_names():
         y = meta.get("yahoo") or f"{code}.T"
         nm[y] = n
     return nm
+
+
+def load_jp_localized_names():
+    """JP 종목 → 영문/한국어 표기 dict 반환.
+
+    fallback chain: yfinance longName (정식 영문) > Google JA→KO (한국어) > None.
+    None 이면 export 단계에서 그 종목의 name_en 컬럼은 NULL.
+    """
+    en = _load_pkl(Path(QB_SCREEN_DIR) / JP_NAMES_EN_PKL) or {}
+    ko = _load_pkl(Path(QB_SCREEN_DIR) / JP_NAMES_KO_PKL) or {}
+    merged = {}
+    for tk, name in en.items():
+        if name:
+            merged[tk] = name           # 영문 우선
+    for tk, name in ko.items():
+        if name and tk not in merged:
+            merged[tk] = name           # 영문 없으면 한국어
+    if merged:
+        print(f"  JP name_en/ko 매핑: 영문 {len(en):,} + 한국어 {len(ko):,} → 통합 {len(merged):,}")
+    return merged
 
 
 def load_us_shares():
@@ -229,7 +251,7 @@ def compute_threshold(week_ts, weekly_cache, mktcap_lookup, top_pct):
 
 
 def extract_week(week_ts, market, rs_table, weekly_cache, ticker_names,
-                 mktcap_lookup, mktcap_top, mktcap_min):
+                 mktcap_lookup, mktcap_top, mktcap_min, names_en=None):
     """한 주차 → (top96 후보, 모든 RS row).
 
     top96: RS ≥ 96 AND (mktcap_top 컷오프 통과) AND (mktcap_min 통과)
@@ -284,6 +306,7 @@ def extract_week(week_ts, market, rs_table, weekly_cache, ticker_names,
             "week_date": week_str,
             "ticker": tk,
             "name": ticker_names.get(tk, "") or "",
+            "name_en": (names_en.get(tk) if names_en else None) or None,
             "rs": int(rs),
             "comp_return": float(comp),
             "close": last_close,
@@ -302,10 +325,12 @@ def fetch_market(market, weeks_back):
     print(f"\n[{market}] 데이터 로드  (시총 상위 {mktcap_top}%"
           + (f" + 최소 {mktcap_min/1e8:,.0f}억" if mktcap_min and market == 'KR' else "")
           + ")")
+    names_en_map = None
     if market == "JP":
         rs_table = pd.DataFrame()                                 # 테이블 없음 — 매 주차 임시 계산
         weekly_cache = _normalize_weekly_cache(load_jp_weekly_cache())
         ticker_names = load_jp_ticker_names()
+        names_en_map = load_jp_localized_names()
         mktcap_cache = {}
         shares_map = load_jp_shares()
         print(f"  weekly_cache: {len(weekly_cache):,}개 · RS 테이블 없음(매 주차 임시 계산) · "
@@ -352,7 +377,8 @@ def fetch_market(market, weeks_back):
     for i, w in enumerate(weeks, 1):
         top96, all_rs = extract_week(w, market, rs_table, weekly_cache,
                                      ticker_names, mktcap_lookup,
-                                     mktcap_top, mktcap_min)
+                                     mktcap_top, mktcap_min,
+                                     names_en=names_en_map)
         top96_all.extend(top96)
         for r in top96:
             rs96_tickers.add(r["ticker"])

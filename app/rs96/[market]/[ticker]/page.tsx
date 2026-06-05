@@ -74,7 +74,7 @@ export default async function RsTickerHistory({
       .order("week_date", { ascending: true }),
     supabase
       .from("rs_top_weekly")
-      .select("name,close,mktcap")
+      .select("name,name_en,close,mktcap")
       .eq("market", market)
       .eq("ticker", ticker)
       .order("week_date", { ascending: false })
@@ -83,7 +83,7 @@ export default async function RsTickerHistory({
   ]);
 
   const hist = (histRes.data as RsHistoryWeekly[]) ?? [];
-  const meta = nameRes.data as { name: string | null; close: number | null; mktcap: number | null } | null;
+  const meta = nameRes.data as { name: string | null; name_en: string | null; close: number | null; mktcap: number | null } | null;
 
   // 최근이 위에 오도록 표 정렬용 (역순)
   const tableRows = [...hist].reverse();
@@ -104,9 +104,12 @@ export default async function RsTickerHistory({
       </div>
 
       <h1 className="mb-1 text-xl font-bold">
-        {meta?.name || ticker}
+        {meta?.name_en || meta?.name || ticker}
         <span className="ml-2 text-sm font-normal text-muted">{ticker}</span>
       </h1>
+      {market === "JP" && meta?.name_en && meta?.name && meta.name !== meta.name_en && (
+        <p className="mb-1 text-sm text-muted">{meta.name}</p>
+      )}
       <p className="mb-5 text-xs text-muted">
         RS96+ 에 한 번이라도 들어간 종목의 최근 {hist.length}주 RS 추이.
         주차 데이터는 quantBacktest 시스템의 weekly cache에서 계산됩니다.
