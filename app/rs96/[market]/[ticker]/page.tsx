@@ -72,7 +72,7 @@ export default async function RsTickerHistory({
       .order("week_date", { ascending: true }),
     supabase
       .from("rs_top_weekly")
-      .select("name,close,mktcap_krw")
+      .select("name,close,mktcap")
       .eq("market", market)
       .eq("ticker", ticker)
       .order("week_date", { ascending: false })
@@ -81,7 +81,7 @@ export default async function RsTickerHistory({
   ]);
 
   const hist = (histRes.data as RsHistoryWeekly[]) ?? [];
-  const meta = nameRes.data as { name: string | null; close: number | null; mktcap_krw: number | null } | null;
+  const meta = nameRes.data as { name: string | null; close: number | null; mktcap: number | null } | null;
 
   // 최근이 위에 오도록 표 정렬용 (역순)
   const tableRows = [...hist].reverse();
