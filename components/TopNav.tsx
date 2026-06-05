@@ -34,7 +34,7 @@ export default function TopNav() {
   return (
     <nav className="hidden items-center gap-5 text-sm lg:flex">
       {LEFT_TABS.map((t) => <TabLink key={t.href} tab={t} active={t.match(p)} />)}
-      <span className="text-[var(--color-borderc)] select-none">|</span>
+      <span aria-hidden className="mx-1 h-5 w-px bg-[var(--color-borderc)]" />
       {RIGHT_TABS.map((t) => <TabLink key={t.href} tab={t} active={t.match(p)} />)}
     </nav>
   );
