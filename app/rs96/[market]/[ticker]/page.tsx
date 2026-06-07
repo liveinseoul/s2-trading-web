@@ -38,7 +38,21 @@ function rsBarOpacity(rs: number): number {
   return 0.40;                    // RS89 이하: 옅은 회색
 }
 
-function RsBars({ data }: { data: { week_date: string; rs: number }[] }) {
+function fmtClose(close: number | null, market: RsMarket): string {
+  if (close == null) return "-";
+  if (market === "US") {
+    return close.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  return close.toLocaleString(market === "JP" ? "ja-JP" : "ko-KR", { maximumFractionDigits: 0 });
+}
+
+function RsBars({
+  data,
+  market,
+}: {
+  data: { week_date: string; rs: number; close: number | null }[];
+  market: RsMarket;
+}) {
   if (data.length === 0) return null;
   const w = 100;       // viewBox width
   const h = 30;
@@ -67,7 +81,7 @@ function RsBars({ data }: { data: { week_date: string; rs: number }[] }) {
               height={h}
               fill="transparent"
             >
-              <title>{`${d.week_date}  ·  RS ${d.rs}${d.rs >= 96 ? "  (RS96+)" : ""}`}</title>
+              <title>{`${d.week_date}  ·  RS ${d.rs}  ·  ${fmtClose(d.close, market)}`}</title>
             </rect>
           </g>
         );
@@ -155,7 +169,7 @@ export default async function RsTickerHistory({
           </div>
 
           <Section title="주차별 RS 추이" sub="막대 — RS96+ 진한 강조색 · 90~95 중간 강조색 · 89 이하 옅은 회색(관심 외)">
-            <RsBars data={hist} />
+            <RsBars data={hist} market={market} />
             <div className="mt-2 flex justify-between text-[11px] text-muted">
               <span>{hist[0]?.week_date}</span>
               <span>RS 범위: {rsMin} ~ {rsMax}</span>
