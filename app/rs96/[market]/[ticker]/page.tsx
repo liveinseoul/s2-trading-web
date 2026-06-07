@@ -27,12 +27,15 @@ export async function generateMetadata({
 }
 
 // Sparkline-like 작은 막대 (SVG, recharts 의존성 X)
-// RS 강도에 따라 accent 색의 opacity 단계로 표현
-function rsOpacity(rs: number): number {
+// RS 강도에 따라 색·명도 단계화: 90 이상은 accent(강조색), 89 이하는 muted(회색·관심 X)
+function rsBarFill(rs: number): string {
+  if (rs >= 90) return "var(--color-accent)";   // RS90+: 강조색
+  return "var(--color-muted)";                   // RS89 이하: 회색
+}
+function rsBarOpacity(rs: number): number {
   if (rs >= 96) return 1.0;       // RS96+: 진한
   if (rs >= 90) return 0.55;      // RS90~95: 중간
-  if (rs >= 87) return 0.15;      // RS87~89: 매우 흐림 (사용자 요청, 이전 0.30 에서 낮춤)
-  return 0.15;                    // 그 미만: 매우 흐림
+  return 0.40;                    // RS89 이하: 옅은 회색
 }
 
 function RsBars({ data }: { data: { week_date: string; rs: number }[] }) {
@@ -53,8 +56,8 @@ function RsBars({ data }: { data: { week_date: string; rs: number }[] }) {
               y={h - bh}
               width={rectW}
               height={bh}
-              fill="var(--color-accent)"
-              fillOpacity={rsOpacity(d.rs)}
+              fill={rsBarFill(d.rs)}
+              fillOpacity={rsBarOpacity(d.rs)}
             />
             {/* hover 영역: 막대 전체 칸을 덮어 마우스가 빈 위 공간에서도 잡히게 */}
             <rect
@@ -151,7 +154,7 @@ export default async function RsTickerHistory({
             <Stat label="RS96+ 주" value={`${top96Weeks}주`} />
           </div>
 
-          <Section title="주차별 RS 추이" sub="막대 색 단계 — RS96+ 진한 · 90~95 중간 · 그 미만 매우 흐림">
+          <Section title="주차별 RS 추이" sub="막대 — RS96+ 진한 강조색 · 90~95 중간 강조색 · 89 이하 옅은 회색(관심 외)">
             <RsBars data={hist} />
             <div className="mt-2 flex justify-between text-[11px] text-muted">
               <span>{hist[0]?.week_date}</span>
