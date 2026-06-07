@@ -38,15 +38,28 @@ function RsBars({ data }: { data: { week_date: string; rs: number }[] }) {
         // RS 0~99 → 막대 높이 0~h
         const bh = Math.max(1, (d.rs / 99) * h);
         const isTop = d.rs >= 96;
+        const rectW = Math.max(bw - 0.3, 0.6);
         return (
-          <rect
-            key={d.week_date}
-            x={i * bw}
-            y={h - bh}
-            width={Math.max(bw - 0.3, 0.6)}
-            height={bh}
-            fill={isTop ? "var(--color-accent)" : "var(--color-borderc)"}
-          />
+          <g key={d.week_date}>
+            {/* 실제 막대 */}
+            <rect
+              x={i * bw}
+              y={h - bh}
+              width={rectW}
+              height={bh}
+              fill={isTop ? "var(--color-accent)" : "var(--color-borderc)"}
+            />
+            {/* hover 영역: 막대 전체 칸을 덮어 마우스가 빈 위 공간에서도 잡히게 */}
+            <rect
+              x={i * bw}
+              y={0}
+              width={bw}
+              height={h}
+              fill="transparent"
+            >
+              <title>{`${d.week_date}  ·  RS ${d.rs}${d.rs >= 96 ? "  (RS96+)" : ""}`}</title>
+            </rect>
+          </g>
         );
       })}
     </svg>
