@@ -3,6 +3,7 @@ import { supabase, getMeta } from "@/lib/supabase";
 import { Section, Empty } from "@/components/ui";
 import { pct, signClass } from "@/lib/format";
 import type { RsMarket, RsTopWeekly } from "@/lib/types";
+import { JP_CATEGORY_ORDER, jpTheme } from "@/lib/themes/jp";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,78 @@ function fmtPrice(v: number | null, market: RsMarket) {
 }
 
 const MARKET_LABEL: Record<RsMarket, string> = { KR: "한국", US: "미국", JP: "일본" };
+
+function JpThemePanel({ rows }: { rows: RsTopWeekly[] }) {
+  // 큰 카테고리별로 그룹핑 (그 주의 RS96+ 종목 ∩ 사전 매핑)
+  type Item = RsTopWeekly & { theme_name: string; theme_small?: string };
+  const grouped = new Map<string, Item[]>();
+  for (const r of rows) {
+    const t = jpTheme(r.ticker);
+    if (!t) continue;
+    if (!grouped.has(t.big)) grouped.set(t.big, []);
+    grouped.get(t.big)!.push({ ...r, theme_name: t.name, theme_small: t.small });
+  }
+
+  const ordered = JP_CATEGORY_ORDER
+    .filter((c) => grouped.has(c))
+    .map((c) => ({
+      big: c,
+      items: grouped.get(c)!.sort((a, b) => b.rs - a.rs || a.rank_in_week - b.rank_in_week),
+    }));
+  // 정의 순서에 없는 카테고리는 마지막에
+  for (const [big, items] of grouped) {
+    if (!JP_CATEGORY_ORDER.includes(big)) ordered.push({ big, items });
+  }
+
+  const matched = ordered.reduce((s, g) => s + g.items.length, 0);
+  const unmatched = rows.length - matched;
+
+  if (matched === 0) {
+    return (
+      <div className="rounded-xl border border-[var(--color-borderc)] bg-surface p-4 text-sm text-muted">
+        이 주차 RS96+ 종목 중 사전 매핑된 테마 분류 없음.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-[var(--color-borderc)] bg-surface p-4">
+      <h3 className="mb-0.5 text-sm font-bold">테마 분류</h3>
+      <p className="mb-3 text-[11px] leading-relaxed text-muted">
+        AI 인프라 공급망 (반도체 소재·소자·MLCC·광통신·FA 등). 이 주차 RS96+ 중 <b>{matched}개</b> 분류
+        {unmatched > 0 && <> · 미분류 {unmatched}개</>}.
+      </p>
+      <div className="flex flex-col gap-3">
+        {ordered.map((g) => (
+          <div key={g.big}>
+            <h4 className="mb-1 text-xs font-semibold text-textc">
+              {g.big} <span className="ml-1 font-normal text-muted">{g.items.length}</span>
+            </h4>
+            <ul className="space-y-0.5">
+              {g.items.map((it) => (
+                <li key={it.ticker} className="flex items-baseline justify-between gap-2 text-xs">
+                  <div className="min-w-0 flex-1 truncate">
+                    <Link
+                      href={`/rs96/JP/${encodeURIComponent(it.ticker)}`}
+                      className="text-textc hover:text-accent"
+                    >
+                      {it.theme_name}
+                    </Link>
+                    {it.theme_small && (
+                      <span className="ml-1 text-[10px] text-muted">· {it.theme_small}</span>
+                    )}
+                    <span className="ml-1 text-[10px] text-muted">{it.ticker.replace(".T", "")}</span>
+                  </div>
+                  <span className="tnum font-medium text-accent">{it.rs}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default async function RsScreen({
   searchParams,
@@ -163,6 +236,8 @@ export default async function RsScreen({
             </div>
           </div>
 
+          <div className={market === "JP" ? "lg:grid lg:grid-cols-[1fr_300px] lg:gap-6 lg:items-start" : ""}>
+          <div className="min-w-0">
           <Section
             title={`${MARKET_LABEL[market]} · ${selectedWeek} · ${rows.length}종목`}
             sub="종목을 누르면 그 종목의 주차별 RS 추이를 볼 수 있습니다."
@@ -223,6 +298,13 @@ export default async function RsScreen({
             12주 가중치 2배, 24·36·48주 가중치 1배의 누적 수익률.
             분할·액면병합 보정 누락 종목은 극단값이 나올 수 있으니 RS 등급만 기준으로 보세요.
           </p>
+          </div>
+          {market === "JP" && rows.length > 0 && (
+            <aside className="mt-4 lg:mt-0 lg:sticky lg:top-20">
+              <JpThemePanel rows={rows} />
+            </aside>
+          )}
+          </div>
         </>
       )}
     </>
