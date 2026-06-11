@@ -116,6 +116,21 @@ def simulate(px, nmap, mmap, period_start, sm, smy, start_cap):
                 leg(p, d, "stop", p["sell_count"], px_, p["qty"], nav_today)
                 cash += p["qty"] * px_; p["proc"] += p["qty"] * px_; p["qty"] = 0
                 close_trade(p, d, "stop"); del positions[tk]; closed.add(tk); last_exit[tk] = d; continue
+
+            # [옵션 B] 시초 분할매도 — 시가(op) 가 평단×1.03/1.05/1.07 이상이면 시초에 체결로 가정.
+            # 시초 갭업 케이스(시가 = 그날 최고 근처) 정확 처리.
+            # high/low 순서가 모호한 일봉 시뮬 결함 회피 — 시초 매도 후엔 추가매수 차단(sell_count≥1).
+            t = [p["avg_buy"] * (1 + s) for s in S]
+            for stg in range(p["sell_count"] + 1, 4):
+                if op >= t[stg - 1] and p["qty"] > 0:
+                    sq = p["qty"] if stg == 3 else min(round(p["total_qty"] * 0.10), p["qty"])
+                    ex(d, p, f"sell_{stg}", stg, t[stg - 1], sq, nav_today)
+                    leg(p, d, f"sell_{stg}", stg, t[stg - 1], sq, nav_today)
+                    cash += sq * t[stg - 1]; p["proc"] += sq * t[stg - 1]
+                    p["qty"] -= sq; p["sell_count"] = stg; p["stop"] = t[stg - 1]
+                else:
+                    break
+
             bought = False
             if p["sell_count"] == 0 and p["buy_count"] < MAX_BUY:
                 at = p["last_buy"] * (1 - ADD_DROP)
@@ -136,16 +151,22 @@ def simulate(px, nmap, mmap, period_start, sm, smy, start_cap):
                 close_trade(p, d, "newlow_stop"); del positions[tk]; closed.add(tk); last_exit[tk] = d
                 p["min_low"] = min(p["min_low"], lo); continue
             p["min_low"] = min(p["min_low"], lo)
-            t = [p["avg_buy"] * (1 + s) for s in S]
-            for stg in range(p["sell_count"] + 1, 4):
-                if hi >= t[stg - 1] and p["qty"] > 0:
-                    sq = p["qty"] if stg == 3 else min(round(p["total_qty"] * 0.10), p["qty"])
-                    ex(d, p, f"sell_{stg}", stg, t[stg - 1], sq, nav_today)
-                    leg(p, d, f"sell_{stg}", stg, t[stg - 1], sq, nav_today)
-                    cash += sq * t[stg - 1]; p["proc"] += sq * t[stg - 1]
-                    p["qty"] -= sq; p["sell_count"] = stg; p["stop"] = t[stg - 1]
-                else:
-                    break
+
+            # [옵션 B] 추가매수 발생일은 hi 기반 분할매도 검사 보류 —
+            # high 가 추가매수 전이었는지 후였는지 일봉으로 알 수 없어 보수적 처리.
+            # 시초 매도(op) 와 다음 영업일 hi 기반 매도는 그대로 작동.
+            if not bought:
+                # 평단 갱신됐을 수 있으므로 t 재계산
+                t = [p["avg_buy"] * (1 + s) for s in S]
+                for stg in range(p["sell_count"] + 1, 4):
+                    if hi >= t[stg - 1] and p["qty"] > 0:
+                        sq = p["qty"] if stg == 3 else min(round(p["total_qty"] * 0.10), p["qty"])
+                        ex(d, p, f"sell_{stg}", stg, t[stg - 1], sq, nav_today)
+                        leg(p, d, f"sell_{stg}", stg, t[stg - 1], sq, nav_today)
+                        cash += sq * t[stg - 1]; p["proc"] += sq * t[stg - 1]
+                        p["qty"] -= sq; p["sell_count"] = stg; p["stop"] = t[stg - 1]
+                    else:
+                        break
             if p["sell_count"] >= 1 and p["qty"] > 0 and lo <= p["stop"]:
                 ex(d, p, "stop", p["sell_count"], p["stop"], p["qty"], nav_today)
                 leg(p, d, "stop", p["sell_count"], p["stop"], p["qty"], nav_today)
