@@ -29,8 +29,9 @@ export default function RulesPage() {
 
       <Section title="검증 성과 (정직 공개)">
         <ul className="flex flex-col gap-2 text-sm">
-          <li><b>7년(현재 유니버스, 무비용 모델 · 시초 매도·추가매수일 매도 보류 적용)</b>: CAGR ~12% · MDD ~−11% · Calmar ~1.1 · 승률 ~86%.</li>
-          <li><b>12년 시점-정확(상폐 포함, 생존편향 제거)</b>: CAGR ~9% · Calmar ~0.7 — 장기 정직 하한.</li>
+          <li><b>11.8년(2014-08~2026-06, 현재 유니버스, 무비용 모델 · 시초 매도·추가매수일 매도 보류 적용)</b>: CAGR ~5.7% · MDD ~−31% · Calmar ~0.18 · 승률 ~87%.</li>
+          <li><b>참고 — 7.2년(2019-03~) 부분 기간</b>: CAGR ~12% · MDD ~−11% · Calmar ~1.1. 2018·2020 큰 폭락 제외라 부풀어짐.</li>
+          <li><b>12년 시점-정확(상폐 포함, 생존편향 제거, 옵션 B 미적용)</b>: CAGR ~9% · Calmar ~0.7 — quantBacktest 별도 결과.</li>
           <li className="text-muted">두 수치 차이는 기간·생존편향 효과. 본 서비스 표시값은 무비용·0버퍼 모델(주문가 기준)로,
             실제 결과는 슬리피지·수수료·거래세·체결 현실성으로 더 낮을 수 있음.</li>
         </ul>

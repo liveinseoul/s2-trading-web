@@ -36,12 +36,17 @@ PROX = 0.05                      # 예비후보 근접 허용폭(지지선 위 5
 MA_LONG, WINDOW, NL_AFTER, MAX_LEV = 120, 60, 2, 1.3
 S = (0.03, 0.05, 0.07)
 ADD_DROP, MAX_BUY = 0.10, 3
+# 매도 차수별 비중 — 1차/2차는 SELL_STAGE_PCT, 3차는 잔량(=1 - 2*SELL_STAGE_PCT).
+# 기본 10/10/80. 환경변수 S2_SELL_STAGE_PCT 로 변경 가능 (예: 0.30 → 30/30/40).
+SELL_STAGE_PCT = float(os.environ.get("S2_SELL_STAGE_PCT", "0.10"))
 MKT = {"KOSPI": "KS", "KOSDAQ": "KQ"}
 
 
 def load(cfg: Config, end: date):
     """전 구간 px(지표 포함) + 이름/시장 맵 + 스파이크 맵 로드."""
-    px, nmap, mmap, period_start, meta = _prepare(cfg, days=4000, end_date=end, fetch=False)
+    # days: 기본 4000(~11년). 환경변수 S2_LOOKBACK_DAYS 로 늘릴 수 있음 (예: 5000 ≈ 13.7년).
+    days = int(os.environ.get("S2_LOOKBACK_DAYS", "4000"))
+    px, nmap, mmap, period_start, meta = _prepare(cfg, days=days, end_date=end, fetch=False)
     px = px.sort_values(["ticker", "date"]).reset_index(drop=True)
     px["ma_long"] = px.groupby("ticker")["close"].transform(
         lambda s: s.rolling(MA_LONG, min_periods=MA_LONG).mean())
@@ -123,7 +128,7 @@ def simulate(px, nmap, mmap, period_start, sm, smy, start_cap):
             t = [p["avg_buy"] * (1 + s) for s in S]
             for stg in range(p["sell_count"] + 1, 4):
                 if op >= t[stg - 1] and p["qty"] > 0:
-                    sq = p["qty"] if stg == 3 else min(round(p["total_qty"] * 0.10), p["qty"])
+                    sq = p["qty"] if stg == 3 else min(round(p["total_qty"] * SELL_STAGE_PCT), p["qty"])
                     ex(d, p, f"sell_{stg}", stg, t[stg - 1], sq, nav_today)
                     leg(p, d, f"sell_{stg}", stg, t[stg - 1], sq, nav_today)
                     cash += sq * t[stg - 1]; p["proc"] += sq * t[stg - 1]
@@ -160,7 +165,7 @@ def simulate(px, nmap, mmap, period_start, sm, smy, start_cap):
                 t = [p["avg_buy"] * (1 + s) for s in S]
                 for stg in range(p["sell_count"] + 1, 4):
                     if hi >= t[stg - 1] and p["qty"] > 0:
-                        sq = p["qty"] if stg == 3 else min(round(p["total_qty"] * 0.10), p["qty"])
+                        sq = p["qty"] if stg == 3 else min(round(p["total_qty"] * SELL_STAGE_PCT), p["qty"])
                         ex(d, p, f"sell_{stg}", stg, t[stg - 1], sq, nav_today)
                         leg(p, d, f"sell_{stg}", stg, t[stg - 1], sq, nav_today)
                         cash += sq * t[stg - 1]; p["proc"] += sq * t[stg - 1]
@@ -266,7 +271,7 @@ def build_order_plan(positions, d, nav):
                 note=f"{p['buy_count']+1}차 매수(직전매수가 -10%)"))
         t = [p["avg_buy"] * (1 + s) for s in S]                       # 매도 감시(미체결 단계)
         for stg in range(p["sell_count"] + 1, 4):
-            sq = p["qty"] if stg == 3 else min(round(p["total_qty"] * 0.10), p["qty"])
+            sq = p["qty"] if stg == 3 else min(round(p["total_qty"] * SELL_STAGE_PCT), p["qty"])
             plan.append(dict(d=d, ticker=tk, name=p["name"], market=p["market"], order_type="sell",
                 stage=stg, trigger_price=round(t[stg - 1]), qty=int(sq),
                 port_pct=round(sq * t[stg - 1] / nav * 100, 2) if nav > 0 else None, diff=diff,
