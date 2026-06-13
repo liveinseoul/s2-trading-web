@@ -52,10 +52,10 @@ function StockTable({ stocks }: { stocks: GlobalThemeStock[] }) {
       <table className="w-full text-xs tnum">
         <thead className="text-[10px] text-muted">
           <tr className="border-b border-[var(--color-borderc)] text-right">
-            <th className="py-1 text-left">국가</th>
+            <th className="py-1 text-left">국</th>
             <th className="text-left">종목</th>
             <th>RS</th>
-            <th>52주 모멘텀</th>
+            <th>모멘텀</th>
           </tr>
         </thead>
         <tbody>
@@ -113,7 +113,7 @@ function ThemeCard({
   const hasSubs = subcategories && subcategories.length > 0;
   return (
     <article
-      className={`rounded-xl border bg-surface p-4 ${
+      className={`mb-4 break-inside-avoid rounded-xl border bg-surface p-4 ${
         isGlobal ? "border-accent/40" : "border-[var(--color-borderc)]"
       }`}
     >
@@ -277,7 +277,7 @@ export default async function GlobalThemes({
           <Empty>이번 주차에 매핑된 테마가 없습니다.</Empty>
         </Section>
       ) : (
-        <div className="flex flex-col gap-4">
+        <div className="gap-4 [column-fill:_balance] columns-1 sm:columns-2 lg:columns-3">
           {groups.map((g) => (
             <ThemeCard
               key={g.key}
