@@ -13,6 +13,7 @@ export interface GlobalThemeStock {
   name: string | null;
   name_en: string | null;
   rs: number;
+  comp_return: number | null;
   rank_in_week: number;
   small?: string | null;
 }
@@ -23,7 +24,10 @@ export interface GlobalThemeGroup {
   /** 정규화 키 (병합 기준) */
   key: string;
   byMarket: Record<RsMarket, GlobalThemeStock[]>;
+  /** 시장 무관 RS desc → 52주 모멘텀 desc → rank asc 통합 정렬 리스트 */
+  allStocks: GlobalThemeStock[];
   total: number;
+  countByMarket: Record<RsMarket, number>;
   /** 3국 모두 등장 여부 */
   isGlobal: boolean;
 }
@@ -36,6 +40,8 @@ export interface GlobalThemeData {
   unmatched: Record<RsMarket, number>;
   /** 시장별 RS96+ 총 종목 수 */
   totals: Record<RsMarket, number>;
+  /** 시장별 Gemini 의 그 주차 시장 전반 summary (1~2문장) */
+  marketSummaries: Record<RsMarket, string | null>;
 }
 
 /** 전 시장 합쳐 분류 가능한 주차 목록 (최신 → 과거). */
@@ -105,6 +111,7 @@ export async function loadGlobalThemes(
   const weeks: Record<RsMarket, string | null> = { KR: null, US: null, JP: null };
   const totals: Record<RsMarket, number> = { KR: 0, US: 0, JP: 0 };
   const unmatched: Record<RsMarket, number> = { KR: 0, US: 0, JP: 0 };
+  const marketSummaries: Record<RsMarket, string | null> = { KR: null, US: null, JP: null };
 
   // 정규화 키 → 그룹 누적
   const groupMap = new Map<string, GlobalThemeGroup>();
@@ -114,6 +121,7 @@ export async function loadGlobalThemes(
   for (const { market, theme } of themes) {
     if (!theme) continue;
     weeks[market] = theme.week_date;
+    marketSummaries[market] = theme.summary;
     const rows = rowMap.get(market) ?? [];
     totals[market] = rows.length;
     const rowByTk = new Map(rows.map((r) => [r.ticker, r]));
@@ -128,7 +136,9 @@ export async function loadGlobalThemes(
           label: cat.big,
           key,
           byMarket: { KR: [], US: [], JP: [] },
+          allStocks: [],
           total: 0,
+          countByMarket: { KR: 0, US: 0, JP: 0 },
           isGlobal: false,
         };
         groupMap.set(key, g);
@@ -147,6 +157,7 @@ export async function loadGlobalThemes(
           name: r.name,
           name_en: r.name_en,
           rs: r.rs,
+          comp_return: r.comp_return,
           rank_in_week: r.rank_in_week,
           small: cat.small ?? undefined,
         });
@@ -157,7 +168,7 @@ export async function loadGlobalThemes(
     unmatched[market] = rows.length - matchedTickers.size;
   }
 
-  // 라벨 결정 (각 그룹에서 가장 자주 쓰인 big 원형 채택)
+  // 라벨 결정 + 통합 정렬 리스트 생성
   for (const [key, g] of groupMap) {
     const lc = labelCount.get(key);
     if (lc) {
@@ -165,9 +176,29 @@ export async function loadGlobalThemes(
       for (const [lbl, n] of lc) if (n > bestN) { best = lbl; bestN = n; }
       g.label = best || g.label;
     }
-    // 각 시장 내 RS 내림차순 정렬
+    // 시장 무관 통합: RS desc → comp_return desc → rank asc
+    const all: GlobalThemeStock[] = [];
     for (const m of MARKETS) {
-      g.byMarket[m].sort((a, b) => b.rs - a.rs || a.rank_in_week - b.rank_in_week);
+      g.countByMarket[m] = g.byMarket[m].length;
+      all.push(...g.byMarket[m]);
+    }
+    all.sort((a, b) => {
+      if (b.rs !== a.rs) return b.rs - a.rs;
+      const ar = a.comp_return ?? -Infinity;
+      const br = b.comp_return ?? -Infinity;
+      if (br !== ar) return br - ar;
+      return a.rank_in_week - b.rank_in_week;
+    });
+    g.allStocks = all;
+    // 시장 내 정렬도 동일 기준 유지 (필요 시 사용)
+    for (const m of MARKETS) {
+      g.byMarket[m].sort((a, b) => {
+        if (b.rs !== a.rs) return b.rs - a.rs;
+        const ar = a.comp_return ?? -Infinity;
+        const br = b.comp_return ?? -Infinity;
+        if (br !== ar) return br - ar;
+        return a.rank_in_week - b.rank_in_week;
+      });
     }
     g.isGlobal = MARKETS.every((m) => g.byMarket[m].length > 0);
   }
@@ -178,5 +209,5 @@ export async function loadGlobalThemes(
     return b.total - a.total;
   });
 
-  return { groups, weeks, totals, unmatched };
+  return { groups, weeks, totals, unmatched, marketSummaries };
 }

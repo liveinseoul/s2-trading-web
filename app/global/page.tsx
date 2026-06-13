@@ -6,10 +6,6 @@ import type { RsMarket } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-function fmtWeek(d: string) {
-  return d.slice(2);
-}
-
 export const metadata = {
   title: "한미일 모멘텀 테마 — 선두지기(96+)",
   description:
@@ -17,53 +13,122 @@ export const metadata = {
 };
 
 const MARKET_LABEL: Record<RsMarket, string> = { KR: "한국", US: "미국", JP: "일본" };
-const MARKET_FLAG: Record<RsMarket, string> = { KR: "KR", US: "US", JP: "JP" };
 
-function StockRow({ s }: { s: GlobalThemeStock }) {
-  const display = s.name_en || s.name || s.ticker;
-  const subTicker =
-    s.market === "JP" ? s.ticker.replace(".T", "") : s.ticker;
+function fmtWeek(d: string) {
+  return d.slice(2);
+}
+
+function fmtCompReturn(v: number | null): string {
+  if (v == null) return "-";
+  const p = v * 100;
+  return `${p >= 0 ? "+" : ""}${p.toFixed(1)}%`;
+}
+
+function signClass(v: number | null): string {
+  if (v == null || v === 0) return "text-muted";
+  return v > 0 ? "text-up" : "text-down";
+}
+
+const MARKET_BADGE: Record<RsMarket, string> = {
+  KR: "bg-blue-500/15 text-blue-400",
+  US: "bg-emerald-500/15 text-emerald-400",
+  JP: "bg-rose-500/15 text-rose-400",
+};
+
+function MarketBadge({ m }: { m: RsMarket }) {
   return (
-    <li className="flex items-baseline justify-between gap-2 text-xs">
-      <Link
-        href={`/rs96/${s.market}/${encodeURIComponent(s.ticker)}`}
-        className="min-w-0 flex-1 truncate text-textc hover:text-accent"
-        title={display}
-      >
-        {display}
-        <span className="ml-1 text-[10px] text-muted">{subTicker}</span>
-      </Link>
-      <span className="tnum font-semibold text-accent">{s.rs}</span>
-    </li>
+    <span
+      className={`inline-flex h-5 w-7 items-center justify-center rounded text-[10px] font-bold tnum ${MARKET_BADGE[m]}`}
+      title={MARKET_LABEL[m]}
+    >
+      {m}
+    </span>
   );
 }
 
-function MarketColumn({
-  market,
+function ThemeCard({
+  label,
+  total,
+  countByMarket,
+  isGlobal,
   stocks,
 }: {
-  market: RsMarket;
+  label: string;
+  total: number;
+  countByMarket: Record<RsMarket, number>;
+  isGlobal: boolean;
   stocks: GlobalThemeStock[];
 }) {
   return (
-    <div className="min-w-0">
-      <div className="mb-1.5 flex items-center justify-between text-[10px] text-muted">
-        <span className="font-semibold">{MARKET_FLAG[market]}</span>
-        <span>{stocks.length}</span>
-      </div>
-      {stocks.length === 0 ? (
-        <p className="text-[11px] text-muted">—</p>
-      ) : (
-        <ul className="space-y-0.5">
-          {stocks.slice(0, 8).map((s) => (
-            <StockRow key={`${s.market}-${s.ticker}`} s={s} />
-          ))}
-          {stocks.length > 8 && (
-            <li className="text-[10px] text-muted">+{stocks.length - 8}</li>
+    <article
+      className={`rounded-xl border bg-surface p-4 ${
+        isGlobal ? "border-accent/40" : "border-[var(--color-borderc)]"
+      }`}
+    >
+      <header className="mb-3 flex items-center justify-between gap-2">
+        <h3 className="text-base font-bold text-textc">{label}</h3>
+        <div className="flex flex-shrink-0 items-center gap-2 text-[11px]">
+          {isGlobal && (
+            <span className="rounded bg-accent/15 px-1.5 py-0.5 font-semibold text-accent">
+              3국 동시
+            </span>
           )}
-        </ul>
-      )}
-    </div>
+          <span className="tnum text-muted">
+            <span className="text-blue-400">KR {countByMarket.KR}</span>
+            <span className="mx-1">·</span>
+            <span className="text-emerald-400">US {countByMarket.US}</span>
+            <span className="mx-1">·</span>
+            <span className="text-rose-400">JP {countByMarket.JP}</span>
+            <span className="ml-1.5 font-semibold text-textc">총 {total}</span>
+          </span>
+        </div>
+      </header>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs tnum">
+          <thead className="text-[10px] text-muted">
+            <tr className="border-b border-[var(--color-borderc)] text-right">
+              <th className="py-1 text-left">국가</th>
+              <th className="text-left">종목</th>
+              <th>RS</th>
+              <th>52주 모멘텀</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stocks.map((s) => {
+              const display = s.name_en || s.name || s.ticker;
+              const subTicker = s.market === "JP" ? s.ticker.replace(".T", "") : s.ticker;
+              return (
+                <tr
+                  key={`${s.market}-${s.ticker}`}
+                  className="border-b border-[var(--color-borderc)] text-right last:border-0 hover:bg-bg/40"
+                >
+                  <td className="py-1 text-left">
+                    <MarketBadge m={s.market} />
+                  </td>
+                  <td className="min-w-0 text-left">
+                    <Link
+                      href={`/rs96/${s.market}/${encodeURIComponent(s.ticker)}`}
+                      className="font-medium text-textc hover:text-accent"
+                    >
+                      {display}
+                    </Link>
+                    <span className="ml-2 text-[10px] text-muted">{subTicker}</span>
+                    {s.small && (
+                      <span className="ml-1.5 text-[10px] text-muted">· {s.small}</span>
+                    )}
+                  </td>
+                  <td className="font-semibold text-accent">{s.rs}</td>
+                  <td className={signClass(s.comp_return == null ? null : s.comp_return * 100)}>
+                    {fmtCompReturn(s.comp_return)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </article>
   );
 }
 
@@ -78,9 +143,10 @@ export default async function GlobalThemes({
     sp.week && availWeeks.includes(sp.week) ? sp.week : (availWeeks[0] ?? null);
 
   const data = await loadGlobalThemes(selectedWeek);
-  const { groups, weeks, totals, unmatched } = data;
+  const { groups, weeks, totals, unmatched, marketSummaries } = data;
 
   const noData = Object.values(weeks).every((w) => !w);
+  const hasAnySummary = Object.values(marketSummaries).some((s) => s);
 
   return (
     <>
@@ -132,6 +198,7 @@ export default async function GlobalThemes({
         </div>
       )}
 
+      {/* 시장별 메타 */}
       <div className="mb-4 grid grid-cols-3 gap-2 text-xs">
         {(["KR", "US", "JP"] as RsMarket[]).map((m) => (
           <div
@@ -154,6 +221,25 @@ export default async function GlobalThemes({
         ))}
       </div>
 
+      {/* Gemini 의 시장별 한줄평 */}
+      {hasAnySummary && (
+        <div className="mb-5 grid gap-2 sm:grid-cols-3">
+          {(["KR", "US", "JP"] as RsMarket[]).map((m) =>
+            marketSummaries[m] ? (
+              <div
+                key={m}
+                className="rounded-lg border-l-2 border-accent bg-surface p-3 text-xs leading-relaxed"
+              >
+                <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold text-muted">
+                  <MarketBadge m={m} /> Gemini 한줄평
+                </div>
+                <p className="text-textc">{marketSummaries[m]}</p>
+              </div>
+            ) : null,
+          )}
+        </div>
+      )}
+
       {noData ? (
         <Section title="데이터 없음">
           <Empty>아직 적재된 테마 데이터가 없습니다. 매주 자동 갱신됩니다.</Empty>
@@ -163,33 +249,16 @@ export default async function GlobalThemes({
           <Empty>이번 주차에 매핑된 테마가 없습니다.</Empty>
         </Section>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="flex flex-col gap-4">
           {groups.map((g) => (
-            <article
+            <ThemeCard
               key={g.key}
-              className={`rounded-xl border bg-surface p-4 ${
-                g.isGlobal
-                  ? "border-accent/40"
-                  : "border-[var(--color-borderc)]"
-              }`}
-            >
-              <header className="mb-3 flex items-start justify-between gap-2">
-                <h3 className="text-sm font-bold text-textc">{g.label}</h3>
-                <div className="flex flex-shrink-0 items-center gap-1.5">
-                  {g.isGlobal && (
-                    <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold text-accent">
-                      3국 동시
-                    </span>
-                  )}
-                  <span className="tnum text-[11px] text-muted">{g.total}</span>
-                </div>
-              </header>
-              <div className="grid grid-cols-3 gap-3">
-                <MarketColumn market="KR" stocks={g.byMarket.KR} />
-                <MarketColumn market="US" stocks={g.byMarket.US} />
-                <MarketColumn market="JP" stocks={g.byMarket.JP} />
-              </div>
-            </article>
+              label={g.label}
+              total={g.total}
+              countByMarket={g.countByMarket}
+              isGlobal={g.isGlobal}
+              stocks={g.allStocks}
+            />
           ))}
         </div>
       )}
@@ -197,7 +266,7 @@ export default async function GlobalThemes({
       <p className="mt-6 text-xs leading-relaxed text-muted">
         테마는 Gemini 가 시장별로 분류한 결과를 <b>이름 정규화</b>로 통합한 것입니다(예: &quot;AI 인프라&quot; ≈ &quot;AI infrastructure&quot;).
         시장별 분류 시점·기준이 미세하게 다를 수 있어 100% 정확한 통합은 아니며,
-        같은 테마가 다른 이름으로 흩어져 있을 수 있습니다. 종목별 RS 시계열은 카드 안 종목명을 누르세요.
+        같은 테마가 다른 이름으로 흩어져 있을 수 있습니다. 종목별 RS 시계열은 종목명 클릭.
       </p>
     </>
   );
