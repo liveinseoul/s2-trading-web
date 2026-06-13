@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Section, Empty } from "@/components/ui";
 import { loadGlobalThemes, fetchGlobalWeeks } from "@/lib/globalTheme";
-import type { GlobalThemeStock } from "@/lib/globalTheme";
+import type { GlobalThemeStock, GlobalSubcategory } from "@/lib/globalTheme";
 import type { RsMarket } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -46,19 +46,71 @@ function MarketBadge({ m }: { m: RsMarket }) {
   );
 }
 
+function StockTable({ stocks }: { stocks: GlobalThemeStock[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs tnum">
+        <thead className="text-[10px] text-muted">
+          <tr className="border-b border-[var(--color-borderc)] text-right">
+            <th className="py-1 text-left">국가</th>
+            <th className="text-left">종목</th>
+            <th>RS</th>
+            <th>52주 모멘텀</th>
+          </tr>
+        </thead>
+        <tbody>
+          {stocks.map((s) => {
+            const display = s.name_en || s.name || s.ticker;
+            const subTicker = s.market === "JP" ? s.ticker.replace(".T", "") : s.ticker;
+            return (
+              <tr
+                key={`${s.market}-${s.ticker}`}
+                className="border-b border-[var(--color-borderc)] text-right last:border-0 hover:bg-bg/40"
+              >
+                <td className="py-1 text-left">
+                  <MarketBadge m={s.market} />
+                </td>
+                <td className="min-w-0 text-left">
+                  <Link
+                    href={`/rs96/${s.market}/${encodeURIComponent(s.ticker)}`}
+                    className="font-medium text-textc hover:text-accent"
+                  >
+                    {display}
+                  </Link>
+                  <span className="ml-2 text-[10px] text-muted">{subTicker}</span>
+                  {s.small && (
+                    <span className="ml-1.5 text-[10px] text-muted">· {s.small}</span>
+                  )}
+                </td>
+                <td className="font-semibold text-accent">{s.rs}</td>
+                <td className={signClass(s.comp_return == null ? null : s.comp_return * 100)}>
+                  {fmtCompReturn(s.comp_return)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function ThemeCard({
   label,
   total,
   countByMarket,
   isGlobal,
   stocks,
+  subcategories,
 }: {
   label: string;
   total: number;
   countByMarket: Record<RsMarket, number>;
   isGlobal: boolean;
   stocks: GlobalThemeStock[];
+  subcategories?: GlobalSubcategory[];
 }) {
+  const hasSubs = subcategories && subcategories.length > 0;
   return (
     <article
       className={`rounded-xl border bg-surface p-4 ${
@@ -68,6 +120,11 @@ function ThemeCard({
       <header className="mb-3 flex items-center justify-between gap-2">
         <h3 className="text-base font-bold text-textc">{label}</h3>
         <div className="flex flex-shrink-0 items-center gap-2 text-[11px]">
+          {hasSubs && (
+            <span className="rounded bg-purple-500/15 px-1.5 py-0.5 font-semibold text-purple-400">
+              {subcategories!.length}개 세분
+            </span>
+          )}
           {isGlobal && (
             <span className="rounded bg-accent/15 px-1.5 py-0.5 font-semibold text-accent">
               3국 동시
@@ -84,50 +141,21 @@ function ThemeCard({
         </div>
       </header>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs tnum">
-          <thead className="text-[10px] text-muted">
-            <tr className="border-b border-[var(--color-borderc)] text-right">
-              <th className="py-1 text-left">국가</th>
-              <th className="text-left">종목</th>
-              <th>RS</th>
-              <th>52주 모멘텀</th>
-            </tr>
-          </thead>
-          <tbody>
-            {stocks.map((s) => {
-              const display = s.name_en || s.name || s.ticker;
-              const subTicker = s.market === "JP" ? s.ticker.replace(".T", "") : s.ticker;
-              return (
-                <tr
-                  key={`${s.market}-${s.ticker}`}
-                  className="border-b border-[var(--color-borderc)] text-right last:border-0 hover:bg-bg/40"
-                >
-                  <td className="py-1 text-left">
-                    <MarketBadge m={s.market} />
-                  </td>
-                  <td className="min-w-0 text-left">
-                    <Link
-                      href={`/rs96/${s.market}/${encodeURIComponent(s.ticker)}`}
-                      className="font-medium text-textc hover:text-accent"
-                    >
-                      {display}
-                    </Link>
-                    <span className="ml-2 text-[10px] text-muted">{subTicker}</span>
-                    {s.small && (
-                      <span className="ml-1.5 text-[10px] text-muted">· {s.small}</span>
-                    )}
-                  </td>
-                  <td className="font-semibold text-accent">{s.rs}</td>
-                  <td className={signClass(s.comp_return == null ? null : s.comp_return * 100)}>
-                    {fmtCompReturn(s.comp_return)}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {hasSubs ? (
+        <div className="flex flex-col gap-4">
+          {subcategories!.map((sub, i) => (
+            <div key={`${sub.label}-${i}`}>
+              <h4 className="mb-1.5 text-xs font-semibold text-textc">
+                {sub.label}
+                <span className="ml-1.5 font-normal text-muted">{sub.stocks.length}</span>
+              </h4>
+              <StockTable stocks={sub.stocks} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <StockTable stocks={stocks} />
+      )}
     </article>
   );
 }
@@ -258,6 +286,7 @@ export default async function GlobalThemes({
               countByMarket={g.countByMarket}
               isGlobal={g.isGlobal}
               stocks={g.allStocks}
+              subcategories={g.subcategories}
             />
           ))}
         </div>

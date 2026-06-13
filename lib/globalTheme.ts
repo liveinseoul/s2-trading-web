@@ -18,6 +18,11 @@ export interface GlobalThemeStock {
   small?: string | null;
 }
 
+export interface GlobalSubcategory {
+  label: string;
+  stocks: GlobalThemeStock[];
+}
+
 export interface GlobalThemeGroup {
   /** 표시용 테마명 (가장 자주 등장한 big 의 원형) */
   label: string;
@@ -30,6 +35,8 @@ export interface GlobalThemeGroup {
   countByMarket: Record<RsMarket, number>;
   /** 3국 모두 등장 여부 */
   isGlobal: boolean;
+  /** Gemini 가 50+ 테마를 서브카테고리로 세분 (있을 때만) */
+  subcategories?: GlobalSubcategory[];
 }
 
 export interface GlobalThemeData {
@@ -52,6 +59,25 @@ export async function fetchGlobalWeeks(): Promise<string[]> {
     .order("week_date", { ascending: false });
   const rows = (r.data as { week_date: string }[]) ?? [];
   return Array.from(new Set(rows.map((x) => x.week_date)));
+}
+
+interface SubthemeRow {
+  week_date: string;
+  theme_key: string;
+  theme_label: string;
+  total_stocks: number;
+  subcategories: { label: string; tickers: string[] }[];
+}
+
+async function fetchSubdivisions(weekDate: string): Promise<Map<string, SubthemeRow>> {
+  const r = await supabase
+    .from("rs_subtheme_global_weekly")
+    .select("*")
+    .eq("week_date", weekDate);
+  // 테이블이 없을 경우(아직 마이그레이션 안 됨) 빈 맵으로 graceful fallback
+  if (r.error) return new Map();
+  const rows = (r.data as SubthemeRow[]) ?? [];
+  return new Map(rows.map((x) => [x.theme_key, x]));
 }
 
 /** 정규화: 대소문자·공백·일부 특수문자 제거 + 흔한 동의어를 한 표현으로. */
@@ -208,6 +234,43 @@ export async function loadGlobalThemes(
     if (a.isGlobal !== b.isGlobal) return a.isGlobal ? -1 : 1;
     return b.total - a.total;
   });
+
+  // 50+ 테마 서브디비전 머지 (selectedWeek 기준)
+  const subWeek = selectedWeek ?? Object.values(weeks).find((v) => v) ?? null;
+  if (subWeek) {
+    const subMap = await fetchSubdivisions(subWeek);
+    for (const g of groups) {
+      const sub = subMap.get(g.key);
+      if (!sub) continue;
+      const stockByTk = new Map(g.allStocks.map((s) => [s.ticker, s] as const));
+      const used = new Set<string>();
+      const subcategories: GlobalSubcategory[] = sub.subcategories.map((sc) => {
+        const items: GlobalThemeStock[] = [];
+        for (const tk of sc.tickers) {
+          const s = stockByTk.get(tk);
+          if (!s) continue;
+          if (used.has(tk)) continue;
+          used.add(tk);
+          items.push(s);
+        }
+        items.sort((a, b) => {
+          if (b.rs !== a.rs) return b.rs - a.rs;
+          const ar = a.comp_return ?? -Infinity;
+          const br = b.comp_return ?? -Infinity;
+          if (br !== ar) return br - ar;
+          return a.rank_in_week - b.rank_in_week;
+        });
+        return { label: sc.label, stocks: items };
+      }).filter((s) => s.stocks.length > 0);
+
+      // 누락된 종목은 "기타" 로 모아둠
+      const leftover = g.allStocks.filter((s) => !used.has(s.ticker));
+      if (leftover.length > 0) {
+        subcategories.push({ label: "기타", stocks: leftover });
+      }
+      g.subcategories = subcategories;
+    }
+  }
 
   return { groups, weeks, totals, unmatched, marketSummaries };
 }
