@@ -30,12 +30,22 @@ export interface GlobalThemeGroup {
 
 export interface GlobalThemeData {
   groups: GlobalThemeGroup[];
-  /** 시장별 최신 주차 */
+  /** 시장별 사용한 주차 */
   weeks: Record<RsMarket, string | null>;
   /** 시장별 미분류(테마에 매핑 안 됨) 종목 수 */
   unmatched: Record<RsMarket, number>;
   /** 시장별 RS96+ 총 종목 수 */
   totals: Record<RsMarket, number>;
+}
+
+/** 전 시장 합쳐 분류 가능한 주차 목록 (최신 → 과거). */
+export async function fetchGlobalWeeks(): Promise<string[]> {
+  const r = await supabase
+    .from("rs_theme_weekly")
+    .select("week_date")
+    .order("week_date", { ascending: false });
+  const rows = (r.data as { week_date: string }[]) ?? [];
+  return Array.from(new Set(rows.map((x) => x.week_date)));
 }
 
 /** 정규화: 대소문자·공백·일부 특수문자 제거 + 흔한 동의어를 한 표현으로. */
@@ -62,16 +72,18 @@ function normalizeBig(s: string): string {
   return v;
 }
 
-export async function loadGlobalThemes(): Promise<GlobalThemeData> {
-  // 시장별 최신 주차 1건씩만
+export async function loadGlobalThemes(
+  selectedWeek?: string | null,
+): Promise<GlobalThemeData> {
+  // selectedWeek 가 있으면 그 주차로 fetch (시장별로 동일 주차), 없으면 시장별 최신
   const themePromises = MARKETS.map(async (m) => {
-    const r = await supabase
-      .from("rs_theme_weekly")
-      .select("*")
-      .eq("market", m)
-      .order("week_date", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    let q = supabase.from("rs_theme_weekly").select("*").eq("market", m);
+    if (selectedWeek) {
+      q = q.eq("week_date", selectedWeek);
+    } else {
+      q = q.order("week_date", { ascending: false }).limit(1);
+    }
+    const r = await q.maybeSingle();
     return { market: m, theme: (r.data as RsThemeWeekly | null) ?? null };
   });
   const themes = await Promise.all(themePromises);

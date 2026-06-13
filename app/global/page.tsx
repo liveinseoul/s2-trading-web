@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { Section, Empty } from "@/components/ui";
-import { loadGlobalThemes } from "@/lib/globalTheme";
+import { loadGlobalThemes, fetchGlobalWeeks } from "@/lib/globalTheme";
 import type { GlobalThemeStock } from "@/lib/globalTheme";
 import type { RsMarket } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+
+function fmtWeek(d: string) {
+  return d.slice(2);
+}
 
 export const metadata = {
   title: "한미일 모멘텀 테마 — 선두지기(96+)",
@@ -63,8 +67,17 @@ function MarketColumn({
   );
 }
 
-export default async function GlobalThemes() {
-  const data = await loadGlobalThemes();
+export default async function GlobalThemes({
+  searchParams,
+}: {
+  searchParams: Promise<{ week?: string }>;
+}) {
+  const sp = await searchParams;
+  const availWeeks = await fetchGlobalWeeks();
+  const selectedWeek =
+    sp.week && availWeeks.includes(sp.week) ? sp.week : (availWeeks[0] ?? null);
+
+  const data = await loadGlobalThemes(selectedWeek);
   const { groups, weeks, totals, unmatched } = data;
 
   const noData = Object.values(weeks).every((w) => !w);
@@ -76,6 +89,48 @@ export default async function GlobalThemes() {
         3개 시장의 RS96+ 종목을 Gemini 가 분류한 테마로 묶어 한 화면에. <b className="text-textc">3국 동시</b> 가동되는 테마가 위쪽,
         총 종목 수 내림차순. 종목 클릭으로 주차별 RS 추이.
       </p>
+
+      {availWeeks.length > 0 && (
+        <div className="mb-4 flex items-center gap-2 text-sm">
+          <span className="text-muted">주차:</span>
+          <div className="flex flex-wrap gap-1.5">
+            {availWeeks.slice(0, 12).map((w) => {
+              const active = w === selectedWeek;
+              return (
+                <Link
+                  key={w}
+                  href={`/global?week=${w}`}
+                  className={`rounded px-2 py-1 text-xs tnum ${
+                    active
+                      ? "bg-accent text-white"
+                      : "bg-surface text-muted hover:text-textc"
+                  }`}
+                >
+                  {fmtWeek(w)}
+                </Link>
+              );
+            })}
+            {availWeeks.length > 12 && (
+              <details className="relative inline-block">
+                <summary className="cursor-pointer rounded bg-surface px-2 py-1 text-xs text-muted">
+                  이전 {availWeeks.length - 12}주 ▾
+                </summary>
+                <div className="absolute z-20 mt-1 grid max-h-64 w-44 grid-cols-1 gap-0.5 overflow-y-auto rounded-lg border border-[var(--color-borderc)] bg-bg p-2 shadow-lg">
+                  {availWeeks.slice(12).map((w) => (
+                    <Link
+                      key={w}
+                      href={`/global?week=${w}`}
+                      className="rounded px-2 py-1 text-xs tnum text-muted hover:bg-surface hover:text-textc"
+                    >
+                      {w}
+                    </Link>
+                  ))}
+                </div>
+              </details>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="mb-4 grid grid-cols-3 gap-2 text-xs">
         {(["KR", "US", "JP"] as RsMarket[]).map((m) => (
