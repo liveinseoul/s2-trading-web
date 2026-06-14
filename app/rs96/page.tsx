@@ -118,15 +118,24 @@ export default async function RsScreen({
   const sp = await searchParams;
   const market = parseMarket(sp.market);
 
-  // 이용 가능한 주차 목록 (현재 시장)
-  const weeksRes = await supabase
-    .from("rs_top_weekly")
-    .select("week_date")
-    .eq("market", market)
-    .order("week_date", { ascending: false });
-
-  const weekRows = (weeksRes.data as { week_date: string }[]) ?? [];
-  const weeks = Array.from(new Set(weekRows.map((r) => r.week_date)));
+  // 이용 가능한 주차 목록 (현재 시장) — PostgREST 1000행 캡 우회 페이지네이션
+  const seenWeeks = new Set<string>();
+  const PAGE = 1000;
+  for (let page = 0; page < 10; page++) {
+    const from = page * PAGE;
+    const to = from + PAGE - 1;
+    const r = await supabase
+      .from("rs_top_weekly")
+      .select("week_date")
+      .eq("market", market)
+      .order("week_date", { ascending: false })
+      .range(from, to);
+    const rows = (r.data as { week_date: string }[]) ?? [];
+    if (rows.length === 0) break;
+    rows.forEach((x) => seenWeeks.add(x.week_date));
+    if (rows.length < PAGE) break;
+  }
+  const weeks = Array.from(seenWeeks).sort((a, b) => (a < b ? 1 : -1));
   const selectedWeek = sp.week && weeks.includes(sp.week) ? sp.week : weeks[0];
 
   // 선택 주차의 종목들 + 그 주차 Gemini 테마 분류
