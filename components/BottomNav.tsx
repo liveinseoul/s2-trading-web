@@ -16,6 +16,7 @@ const RS96_TABS = [
   { href: "/rs96?market=US", label: "미국", match: (p: string) => p.startsWith("/rs96/US") },
   { href: "/rs96?market=JP", label: "일본", match: (p: string) => p.startsWith("/rs96/JP") },
   { href: "/global",         label: "테마", match: (p: string) => p.startsWith("/global") },
+  { href: "/rs/search",      label: "조회", match: (p: string) => p.startsWith("/rs/search") },
   { href: "/rules/rs96",     label: "규칙", match: (p: string) => p.startsWith("/rules") },
 ];
 

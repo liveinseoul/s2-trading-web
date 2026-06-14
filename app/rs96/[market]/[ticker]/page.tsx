@@ -101,26 +101,42 @@ export default async function RsTickerHistory({
 
   const ticker = decodeURIComponent(tickerParam);
 
-  // 시계열 + 종목 이름(top 테이블에서 가장 최근 행으로 보강)
-  const [histRes, nameRes] = await Promise.all([
-    supabase
-      .from("rs_history_weekly")
-      .select("*")
-      .eq("market", market)
-      .eq("ticker", ticker)
-      .order("week_date", { ascending: true }),
-    supabase
-      .from("rs_top_weekly")
-      .select("name,name_en,close,mktcap")
-      .eq("market", market)
-      .eq("ticker", ticker)
-      .order("week_date", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ]);
+  // 시계열 — rs_universe_weekly (풀 유니버스 + name 포함) 우선, 없으면 rs_history_weekly fallback
+  const univRes = await supabase
+    .from("rs_universe_weekly")
+    .select("*")
+    .eq("market", market)
+    .eq("ticker", ticker)
+    .order("week_date", { ascending: true });
 
-  const hist = (histRes.data as RsHistoryWeekly[]) ?? [];
-  const meta = nameRes.data as { name: string | null; name_en: string | null; close: number | null; mktcap: number | null } | null;
+  let hist: RsHistoryWeekly[] = [];
+  let meta: { name: string | null; name_en: string | null; close: number | null; mktcap: number | null } | null = null;
+
+  if (!univRes.error && univRes.data && univRes.data.length > 0) {
+    const rows = univRes.data as Array<RsHistoryWeekly & { name: string | null; name_en: string | null; mktcap: number | null }>;
+    hist = rows.map((r) => ({ market: r.market, ticker: r.ticker, week_date: r.week_date, rs: r.rs, comp_return: r.comp_return, close: r.close }));
+    const last = rows[rows.length - 1];
+    meta = { name: last.name, name_en: last.name_en, close: last.close, mktcap: last.mktcap };
+  } else {
+    const [histRes, nameRes] = await Promise.all([
+      supabase
+        .from("rs_history_weekly")
+        .select("*")
+        .eq("market", market)
+        .eq("ticker", ticker)
+        .order("week_date", { ascending: true }),
+      supabase
+        .from("rs_top_weekly")
+        .select("name,name_en,close,mktcap")
+        .eq("market", market)
+        .eq("ticker", ticker)
+        .order("week_date", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+    hist = (histRes.data as RsHistoryWeekly[]) ?? [];
+    meta = nameRes.data as { name: string | null; name_en: string | null; close: number | null; mktcap: number | null } | null;
+  }
 
   // 최근이 위에 오도록 표 정렬용 (역순)
   const tableRows = [...hist].reverse();
@@ -148,14 +164,15 @@ export default async function RsTickerHistory({
         <p className="mb-1 text-sm text-muted">{meta.name}</p>
       )}
       <p className="mb-5 text-xs text-muted">
-        RS96+ 에 한 번이라도 들어간 종목의 최근 {hist.length}주 RS 추이.
-        주차 데이터는 quantBacktest 시스템의 weekly cache에서 계산됩니다.
+        최근 {hist.length}주 RS 추이
+        {top96Weeks > 0 && ` · RS96+ ${top96Weeks}주`}.
+        주차 데이터는 quantBacktest 시스템의 weekly cache 에서 계산됩니다.
       </p>
 
       {hist.length === 0 ? (
         <Section title="데이터 없음">
           <Empty>
-            이 종목의 주차별 RS 데이터가 없습니다. RS96+ 목록에 등재된 적이 있는 종목만 시계열이 제공됩니다.
+            이 종목의 주차별 RS 데이터가 없습니다. 시총 필터(상위 20~40%) 통과한 종목만 시계열이 제공됩니다.
           </Empty>
         </Section>
       ) : (

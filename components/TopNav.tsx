@@ -17,12 +17,13 @@ const MARGINKI_RIGHT: Tab[] = [
   { href: "/rules/s2", label: "규칙(S2)",   match: (p) => p === "/rules/s2" || p === "/rules" },
 ];
 
-// 선두지기(96+): 국가별 + 한미일 통합 테마 + 규칙
+// 선두지기(96+): 국가별 + 한미일 통합 테마 + RS 조회 + 규칙
 const RS96_TABS: Tab[] = [
   { href: "/rs96?market=KR", label: "한국", match: (p) => p === "/rs96" || p.startsWith("/rs96/KR") },
   { href: "/rs96?market=US", label: "미국", match: (p) => p.startsWith("/rs96/US") },
   { href: "/rs96?market=JP", label: "일본", match: (p) => p.startsWith("/rs96/JP") },
   { href: "/global",         label: "한미일 테마", match: (p) => p.startsWith("/global") },
+  { href: "/rs/search",      label: "RS조회", match: (p) => p.startsWith("/rs/search") },
   { href: "/rules/rs96",     label: "규칙", match: (p) => p === "/rules/rs96" || p === "/rules" },
 ];
 
