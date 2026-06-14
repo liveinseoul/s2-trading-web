@@ -156,6 +156,21 @@ export default async function RsTickerHistory({
         <span>{MARKET_LABEL[market]}</span>
       </div>
 
+      <form action="/rs/search" method="get" className="mb-4 flex gap-2">
+        <input
+          type="text"
+          name="q"
+          placeholder="다른 종목 검색 (ticker / 회사명)"
+          className="flex-1 rounded-lg border border-[var(--color-borderc)] bg-surface px-3 py-1.5 text-sm text-textc placeholder-muted focus:border-accent focus:outline-none"
+        />
+        <button
+          type="submit"
+          className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white transition hover:opacity-90"
+        >
+          조회
+        </button>
+      </form>
+
       <h1 className="mb-1 text-xl font-bold">
         {meta?.name_en || meta?.name || ticker}
         <span className="ml-2 text-sm font-normal text-muted">{ticker}</span>
