@@ -39,9 +39,10 @@ sys.path.insert(0, str(ROOT))
 os.chdir(ROOT)
 from config import Config                                    # noqa: E402
 
-# ── ETF 화이트리스트 (market='US' 가정) ────────────────────────
-# name 은 yfinance 가 자동 채우고, name_en 은 영문 (한국어 별칭) 형식.
-ETFS = [
+# ── ETF 화이트리스트 (시장별) ──────────────────────────────────
+# name 은 yfinance 가 자동 채움, name_en 은 영문 (한국어 별칭) 형식.
+
+US_ETFS = [
     # 대표 지수
     {"ticker": "SPY",  "name_en": "SPDR S&P 500 ETF (S&P 500)"},
     {"ticker": "QQQ",  "name_en": "Invesco QQQ Trust (나스닥 100)"},
@@ -91,7 +92,65 @@ ETFS = [
     {"ticker": "VGK",  "name_en": "Vanguard FTSE Europe (유럽)"},
 ]
 
-MARKET = "US"        # 현재 화이트리스트는 모두 US 상장 ETF
+# 한국 상장 ETF (KOSPI, .KS 접미사). 자산운용사: KODEX(삼성자산운용), TIGER(미래에셋자산운용).
+KR_ETFS = [
+    # ── KODEX (삼성자산운용)
+    {"ticker": "069500.KS", "name_en": "KODEX 200 (코스피 200)"},
+    {"ticker": "278530.KS", "name_en": "KODEX 200TR (코스피 200 토탈리턴)"},
+    {"ticker": "229200.KS", "name_en": "KODEX 코스닥 150"},
+    {"ticker": "114800.KS", "name_en": "KODEX 인버스"},
+    {"ticker": "122630.KS", "name_en": "KODEX 레버리지"},
+    {"ticker": "252670.KS", "name_en": "KODEX 200선물인버스2X"},
+    {"ticker": "294400.KS", "name_en": "KODEX 코스피TR"},
+    {"ticker": "379800.KS", "name_en": "KODEX 미국S&P500TR"},
+    {"ticker": "379810.KS", "name_en": "KODEX 미국나스닥100TR"},
+    {"ticker": "133690.KS", "name_en": "KODEX 미국나스닥100선물(H)"},
+    {"ticker": "099140.KS", "name_en": "KODEX 차이나H"},
+    {"ticker": "091160.KS", "name_en": "KODEX 반도체"},
+    {"ticker": "091170.KS", "name_en": "KODEX 은행"},
+    {"ticker": "091180.KS", "name_en": "KODEX 자동차"},
+    {"ticker": "098560.KS", "name_en": "KODEX 미디어&엔터테인먼트"},
+    {"ticker": "266360.KS", "name_en": "KODEX 한국대만IT프리미어"},
+    {"ticker": "305720.KS", "name_en": "KODEX 2차전지산업"},
+    {"ticker": "117460.KS", "name_en": "KODEX 에너지화학"},
+    {"ticker": "117680.KS", "name_en": "KODEX 철강"},
+    {"ticker": "117700.KS", "name_en": "KODEX 건설"},
+    {"ticker": "132030.KS", "name_en": "KODEX 골드선물(H) (금)"},
+    {"ticker": "153130.KS", "name_en": "KODEX 단기채권"},
+    {"ticker": "114470.KS", "name_en": "KODEX 헬스케어"},
+    {"ticker": "305540.KS", "name_en": "KODEX 2차전지 (배터리)"},
+
+    # ── TIGER (미래에셋자산운용)
+    {"ticker": "102110.KS", "name_en": "TIGER 200 (코스피 200)"},
+    {"ticker": "232080.KS", "name_en": "TIGER 코스닥 150"},
+    {"ticker": "360750.KS", "name_en": "TIGER 미국S&P500"},
+    {"ticker": "133690.KS", "name_en": "TIGER 미국나스닥100"},
+    {"ticker": "381180.KS", "name_en": "TIGER 미국필라델피아반도체나스닥"},
+    {"ticker": "371460.KS", "name_en": "TIGER 차이나전기차SOLACTIVE (중국 전기차)"},
+    {"ticker": "364980.KS", "name_en": "TIGER KRX2차전지K-뉴딜 (배터리)"},
+    {"ticker": "091160.KS", "name_en": "TIGER 반도체"},
+    {"ticker": "143860.KS", "name_en": "TIGER 헬스케어"},
+    {"ticker": "244580.KS", "name_en": "TIGER 바이오TOP10"},
+    {"ticker": "210780.KS", "name_en": "TIGER 코스피고배당"},
+    {"ticker": "329200.KS", "name_en": "TIGER 리츠부동산인프라"},
+    {"ticker": "305080.KS", "name_en": "TIGER 미국채10년선물"},
+    {"ticker": "319640.KS", "name_en": "TIGER 골드선물(H) (금)"},
+    {"ticker": "228810.KS", "name_en": "TIGER 미디어컨텐츠"},
+    {"ticker": "139660.KS", "name_en": "TIGER 200IT (정보기술)"},
+    {"ticker": "139220.KS", "name_en": "TIGER 200건설"},
+    {"ticker": "139250.KS", "name_en": "TIGER 200중공업"},
+    {"ticker": "139270.KS", "name_en": "TIGER 200금융"},
+    {"ticker": "150460.KS", "name_en": "TIGER 중국소비테마"},
+    {"ticker": "157450.KS", "name_en": "TIGER 200에너지화학"},
+    {"ticker": "157500.KS", "name_en": "TIGER 200철강소재"},
+    {"ticker": "227560.KS", "name_en": "TIGER 200산업재"},
+]
+
+# ETF 가 등록된 시장 dict — 'market' 키를 강제로 박아 줌
+ETFS_BY_MARKET = {
+    "US": US_ETFS,
+    "KR": KR_ETFS,
+}
 
 
 # ── 같은 composite_return 공식 (export_rs_weekly 와 일치) ─────
@@ -143,13 +202,14 @@ def _sb_client():
     return req
 
 
-def fetch_us_distribution(req, week: str) -> list[float]:
-    """그 주차 US 전체 universe 종목의 comp_return 분포 (RS 백분위 계산용)."""
+def fetch_market_distribution(req, market: str, week: str) -> list[float]:
+    """그 시장·주차 universe 종목들의 comp_return 분포 (RS 백분위 계산용)."""
     out: list[float] = []
     for page in range(10):
         from_ = page * 1000
         to = from_ + 999
-        path = (f"/rs_universe_weekly?market=eq.US&week_date=eq.{urllib.parse.quote(week)}"
+        path = (f"/rs_universe_weekly?market=eq.{market}"
+                f"&week_date=eq.{urllib.parse.quote(week)}"
                 f"&select=comp_return&order=ticker.asc")
         rows = req("GET", path, prefer="return=representation",
                    range_header=f"{from_}-{to}") or []
@@ -164,16 +224,13 @@ def fetch_us_distribution(req, week: str) -> list[float]:
     return out
 
 
-def fetch_us_weeks(req) -> list[str]:
-    """US rs_universe_weekly 의 distinct week_date 최신순.
-
-    rs_top_weekly (시장당 ~70행/주) 를 쓰면 같은 distinct 를 훨씬 적은 행으로 얻을 수 있음.
-    """
+def fetch_market_weeks(req, market: str) -> list[str]:
+    """그 시장 rs_top_weekly 의 distinct week_date 최신순."""
     seen = set()
     for page in range(20):
         from_ = page * 1000
         to = from_ + 999
-        path = "/rs_top_weekly?market=eq.US&select=week_date&order=week_date.desc"
+        path = f"/rs_top_weekly?market=eq.{market}&select=week_date&order=week_date.desc"
         rows = req("GET", path, prefer="return=representation",
                    range_header=f"{from_}-{to}") or []
         if not rows:
@@ -196,10 +253,11 @@ def percentile_rank(value: float, sorted_dist: list[float]) -> int:
 
 
 # ── ETF 1개 처리 ─────────────────────────────────────────────
-def process_etf(req, etf: dict, us_weeks: list[str], dist_cache: dict[str, list[float]]):
+def process_etf(req, etf: dict, market: str, market_weeks: list[str],
+                dist_cache: dict[tuple[str, str], list[float]]):
     ticker = etf["ticker"]
     name_en = etf["name_en"]
-    print(f"\n[{ticker}] yfinance fetch...")
+    print(f"\n[{market} {ticker}] yfinance fetch...")
     yh = yf.Ticker(ticker)
     info = yh.info or {}
     name = info.get("longName") or info.get("shortName") or ticker
@@ -213,20 +271,18 @@ def process_etf(req, etf: dict, us_weeks: list[str], dist_cache: dict[str, list[
     print(f"  weekly {len(weekly)}주 · longName={name}")
 
     rows = []
-    for w in us_weeks:
+    for w in market_weeks:
         w_ts = pd.Timestamp(w)
-        # weekly index 가 정확히 같은 주차여야
         if w_ts not in weekly.index:
             continue
         comp = composite_return(weekly, w_ts)
         if np.isnan(comp):
             continue
-        # 그 주차 US 분포
-        sorted_dist = dist_cache.get(w)
+        sorted_dist = dist_cache.get((market, w))
         if sorted_dist is None:
-            dist = fetch_us_distribution(req, w)
+            dist = fetch_market_distribution(req, market, w)
             sorted_dist = sorted(dist)
-            dist_cache[w] = sorted_dist
+            dist_cache[(market, w)] = sorted_dist
         if not sorted_dist:
             continue
         rs = percentile_rank(comp, sorted_dist)
@@ -234,7 +290,7 @@ def process_etf(req, etf: dict, us_weeks: list[str], dist_cache: dict[str, list[
             continue
         close_val = float(weekly.loc[w_ts])
         rows.append({
-            "market": MARKET,
+            "market": market,
             "ticker": ticker,
             "week_date": w,
             "name": name,
@@ -248,10 +304,8 @@ def process_etf(req, etf: dict, us_weeks: list[str], dist_cache: dict[str, list[
         print(f"  ⚠ 적재 row 0개")
         return 0
 
-    # upsert: 같은 (market, ticker, week_date) 행 제거 후 insert
     req("DELETE",
-        f"/rs_universe_weekly?market=eq.{MARKET}&ticker=eq.{urllib.parse.quote(ticker)}")
-    # 1000건 청크
+        f"/rs_universe_weekly?market=eq.{market}&ticker=eq.{urllib.parse.quote(ticker)}")
     for i in range(0, len(rows), 500):
         req("POST", "/rs_universe_weekly", rows[i:i+500])
     latest_rs = rows[0]["rs"]
@@ -264,35 +318,45 @@ def main():
     ap.add_argument("--weeks", type=int, default=56,
                     help="최근 N주 (기본 56)")
     ap.add_argument("--ticker", default=None,
-                    help="특정 ticker 1개만 처리 (테스트용)")
+                    help="특정 ticker 1개만 처리 (테스트용, --market 도 같이)")
+    ap.add_argument("--market", default=None,
+                    help="처리할 시장 (US|KR). 미지정 시 모두.")
     args = ap.parse_args()
 
     Config()
     req = _sb_client()
 
-    print("US 주차 목록 fetch...")
-    us_weeks = fetch_us_weeks(req)[: args.weeks]
-    if not us_weeks:
-        raise SystemExit("⚠ US rs_universe_weekly 데이터 없음. 먼저 export_rs_weekly --full-universe 실행 필요.")
-    print(f"  대상 {len(us_weeks)}주 ({us_weeks[-1]} ~ {us_weeks[0]})")
+    markets = [args.market.upper()] if args.market else list(ETFS_BY_MARKET.keys())
 
-    if args.ticker:
-        targets = [{"ticker": args.ticker.upper(), "name_en": args.ticker.upper()}]
-    else:
-        targets = ETFS
-    print(f"\n대상 ETF {len(targets)}개")
-
-    dist_cache: dict[str, list[float]] = {}
+    dist_cache: dict[tuple[str, str], list[float]] = {}
     total_rows = 0
-    for etf in targets:
-        try:
-            total_rows += process_etf(req, etf, us_weeks, dist_cache)
-        except Exception as e:
-            print(f"  ⚠ {etf['ticker']} 처리 실패: {type(e).__name__}: {str(e)[:120]}")
+    for mk in markets:
+        if mk not in ETFS_BY_MARKET:
+            print(f"⚠ unknown market {mk} — skip")
             continue
+        print(f"\n========== [{mk}] ==========")
+        print(f"{mk} 주차 목록 fetch...")
+        market_weeks = fetch_market_weeks(req, mk)[: args.weeks]
+        if not market_weeks:
+            print(f"⚠ {mk} rs_top_weekly 데이터 없음 — skip")
+            continue
+        print(f"  대상 {len(market_weeks)}주 ({market_weeks[-1]} ~ {market_weeks[0]})")
+
+        if args.ticker:
+            targets = [{"ticker": args.ticker, "name_en": args.ticker}]
+        else:
+            targets = ETFS_BY_MARKET[mk]
+        print(f"  대상 ETF {len(targets)}개")
+
+        for etf in targets:
+            try:
+                total_rows += process_etf(req, etf, mk, market_weeks, dist_cache)
+            except Exception as e:
+                print(f"  ⚠ {etf['ticker']} 처리 실패: {type(e).__name__}: {str(e)[:120]}")
+                continue
 
     print(f"\n✅ 총 {total_rows}건 ETF 행 적재 완료.")
-    print(f"   분포 캐시 사용: {len(dist_cache)}주 (각 ~1000건)")
+    print(f"   분포 캐시: {len(dist_cache)}개 (market, week)")
 
 
 if __name__ == "__main__":
