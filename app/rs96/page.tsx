@@ -294,7 +294,7 @@ export default async function RsScreen({
                             : "-"}
                         </td>
                         <td>{fmtPrice(r.close, market)}</td>
-                        <td>{fmtMktcap(r.mktcap, market)}</td>
+                        <td className="text-muted">{fmtMktcap(r.mktcap, market)}</td>
                       </tr>
                     ))}
                   </tbody>
