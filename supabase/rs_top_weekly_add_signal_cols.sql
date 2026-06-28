@@ -25,6 +25,11 @@ alter table public.rs_history_weekly
   add column if not exists align_weeks smallint,
   add column if not exists vol_gap_4_26 real;
 
+-- 거래량 13주MA/26주MA-1 (%). 음수=13<26 역배열(거래량 데드크로스).
+-- 생존분석(han-volume-deadcross-survival)에서 RS 주도권 상실을 유의 선행한 신호 → 화면 표시를 4-26→13-26 으로 전환.
+alter table public.rs_history_weekly
+  add column if not exists vol_gap_13_26 real;
+
 -- rs_universe_weekly (RS() 가 쓰는 넓은 유니버스) 에도 — 구글시트 Apps Script 등에서
 -- AAPL 같은 비RS96+ 종목도 정배열·거래량 신호를 조회할 수 있게.
 alter table public.rs_universe_weekly

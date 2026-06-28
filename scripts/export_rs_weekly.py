@@ -382,13 +382,14 @@ def build_signal_lookup(raw_cache, weeks):
             since = RSC.weeks_since_climax_series(c, v).reindex(widx, method="ffill")
             warn = (since <= RSC.WARN_WITHIN).fillna(False)
             vg = RSC.vol_gap_series(c, v).reindex(widx, method="ffill")
+            vg13 = RSC.vol_gap_13_26_series(c, v).reindex(widx, method="ffill")
             pma = {n: s2.reindex(widx, method="ffill")
                    for n, s2 in RSC.price_ma_series(c).items()}
             vma = {n: s2.reindex(widx, method="ffill")
                    for n, s2 in RSC.vol_ma_series(c, v).items()}
             cd = {k: s2.reindex(widx, method="ffill")
                   for k, s2 in RSC.recent_climax_detail_series(c, v).items()}
-            out[tk] = (aw, warn, vg, pma, vma, cd)
+            out[tk] = (aw, warn, vg, pma, vma, cd, vg13)
         except Exception:
             continue
     return out
@@ -429,8 +430,8 @@ def extract_week(week_ts, market, rs_table, weekly_cache, ticker_names,
         sub = s[s.index <= week_ts]
         last_close = float(sub.iloc[-1]) if len(sub) > 0 else None
 
-        # 보조 신호 (표시용) — 정배열 / 클라이맥스 / 거래량 4-26 갭 / 이동평균 (사전계산)
-        aw_val, cw_val, vg_val = 0, False, None
+        # 보조 신호 (표시용) — 정배열 / 클라이맥스 / 거래량 갭(4-26·13-26) / 이동평균 (사전계산)
+        aw_val, cw_val, vg_val, vg13_val = 0, False, None, None
         cx_week, cx_vmult, cx_ret = None, None, None
         pma_val = {4: None, 13: None, 26: None, 52: None}
         vma_val = {4: None, 13: None, 26: None}
@@ -443,6 +444,8 @@ def extract_week(week_ts, market, rs_table, weekly_cache, ticker_names,
                 aw_val = int(a) if a is not None and not pd.isna(a) else 0
                 cw_val = bool(c2) if c2 is not None and not pd.isna(c2) else False
                 vg_val = round(float(g), 1) if g is not None and not pd.isna(g) else None
+                g13 = sig[6].get(week_ts) if len(sig) > 6 else None
+                vg13_val = round(float(g13), 1) if g13 is not None and not pd.isna(g13) else None
                 # 클라이맥스 진단 — warn 일 때 가장 최근 클라이맥스 주의 3조건 수치
                 if cw_val and len(sig) >= 6:
                     cd = sig[5]
@@ -480,6 +483,7 @@ def extract_week(week_ts, market, rs_table, weekly_cache, ticker_names,
             "close": last_close,
             "align_weeks": aw_val,
             "vol_gap_4_26": vg_val,
+            "vol_gap_13_26": vg13_val,
         })
 
         # mktcap 필터 — universe 통과 여부
@@ -731,6 +735,12 @@ def upsert_supabase(top_rows, hist_rows, rs96_tickers_by_market, universe_rows=N
             for r in hist_rows:
                 r.pop("align_weeks", None)
                 r.pop("vol_gap_4_26", None)
+    if hist_rows and "vol_gap_13_26" in hist_rows[0]:
+        if not _columns_exist("rs_history_weekly", ["vol_gap_13_26"]):
+            print("[supabase] rs_history_weekly 에 vol_gap_13_26 컬럼 없음 "
+                  "— 이번엔 생략(ALTER 실행 후 다음 적재부터 표시)")
+            for r in hist_rows:
+                r.pop("vol_gap_13_26", None)
     if universe_rows and "align_weeks" in universe_rows[0]:
         if not _columns_exist("rs_universe_weekly",
                               ["align_weeks", "vol_ma_4", "price_ma_4"]):

@@ -150,11 +150,17 @@ export default async function RsTickerHistory({
     if (vg == null && r.vol_ma_4 != null && r.vol_ma_26) {
       vg = (r.vol_ma_4 / r.vol_ma_26 - 1) * 100;
     }
+    // vol_gap_13_26: history 값 우선, 없으면 universe 의 vol_ma 로 계산(13w/26w-1)
+    let vg13 = prev?.vol_gap_13_26 ?? null;
+    if (vg13 == null && r.vol_ma_13 != null && r.vol_ma_26) {
+      vg13 = (r.vol_ma_13 / r.vol_ma_26 - 1) * 100;
+    }
     byWeek.set(r.week_date, {
       market: r.market, ticker: r.ticker, week_date: r.week_date,
       rs: r.rs, comp_return: r.comp_return, close: r.close,
       align_weeks: aw,
       vol_gap_4_26: vg,
+      vol_gap_13_26: vg13,
     });
   }
   const hist: RsHistoryWeekly[] = Array.from(byWeek.values())
@@ -275,20 +281,20 @@ export default async function RsTickerHistory({
                   ? `주가 정배열 깨짐 · ${Math.abs(latest.align_weeks)}주 전`
                   : "주가 정배열 ✗"}
             </span>
-            {latest.vol_gap_4_26 != null && (
+            {latest.vol_gap_13_26 != null && (
               <span
-                title="거래량 4주MA/26주MA-1(%). 음수=4w<26w 역배열(거래량 데드크로스). 검증상 매도 알파 없음 — 표시용."
+                title="거래량 13주MA/26주MA-1(%). 음수=13<26 역배열(거래량 데드크로스). 생존분석상 RS 주도권 상실을 유의하게 선행한 신호(단 RS≤87 청산과 중복)."
                 className={`rounded-lg border px-2.5 py-1 ${
-                  latest.vol_gap_4_26 < 0
+                  latest.vol_gap_13_26 < 0
                     ? "border-amber-500/40 bg-amber-500/5 text-amber-600"
                     : "border-[var(--color-borderc)] text-muted"
                 }`}
               >
-                거래량 4-26 {latest.vol_gap_4_26 >= 0 ? "+" : ""}
-                {latest.vol_gap_4_26.toFixed(1)}%
-                {latest.vol_gap_4_26 < 0
-                  ? " · 역배열"
-                  : latest.vol_gap_4_26 < 10
+                거래량 13-26 {latest.vol_gap_13_26 >= 0 ? "+" : ""}
+                {latest.vol_gap_13_26.toFixed(1)}%
+                {latest.vol_gap_13_26 < 0
+                  ? " · 역배열 ✓"
+                  : latest.vol_gap_13_26 < 10
                     ? " · 역배열 근접"
                     : ""}
               </span>
@@ -398,7 +404,7 @@ export default async function RsTickerHistory({
                     <th>RS</th>
                     <th>52주 모멘텀</th>
                     <th title="주봉 정배열 연속주수 (정배열 여부 = >0)">정배열</th>
-                    <th title="거래량 4주MA/26주MA-1(%). 음수=4w<26w 역배열">거래량4-26</th>
+                    <th title="거래량 13주MA/26주MA-1(%). 음수=13<26 역배열(거래량 데드크로스) → RS 주도권 상실 선행 신호">거래량13-26</th>
                     <th>종가</th>
                   </tr>
                 </thead>
@@ -435,14 +441,26 @@ export default async function RsTickerHistory({
                         </td>
                         <td
                           className={
-                            r.vol_gap_4_26 != null && r.vol_gap_4_26 < 0
+                            r.vol_gap_13_26 != null && r.vol_gap_13_26 < 0
                               ? "text-amber-600"
                               : "text-muted"
                           }
                         >
-                          {r.vol_gap_4_26 != null
-                            ? `${r.vol_gap_4_26 >= 0 ? "+" : ""}${Math.round(r.vol_gap_4_26)}%`
-                            : "–"}
+                          {r.vol_gap_13_26 != null ? (
+                            <>
+                              {`${r.vol_gap_13_26 >= 0 ? "+" : ""}${Math.round(r.vol_gap_13_26)}%`}
+                              {r.vol_gap_13_26 < 0 && (
+                                <span
+                                  title="13<26 역배열(거래량 데드크로스)"
+                                  className="ml-1 inline-block rounded bg-amber-500/20 px-1 py-0.5 text-[10px] font-semibold text-amber-600"
+                                >
+                                  역
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            "–"
+                          )}
                         </td>
                         <td>
                           {r.close == null

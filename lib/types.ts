@@ -105,6 +105,7 @@ export interface RsHistoryWeekly {
   close: number | null;
   align_weeks?: number | null;   // 부호 연속주수: 양수=정배열 N주 유지, 음수=N주 전 깨짐
   vol_gap_4_26?: number | null;  // 거래량 4주MA/26주MA-1(%). 음수=4w<26w 역배열(데드크로스)
+  vol_gap_13_26?: number | null; // 거래량 13주MA/26주MA-1(%). 음수=13<26 역배열(RS사망 선행 검증 신호)
 }
 
 export interface RsThemeCategory {
