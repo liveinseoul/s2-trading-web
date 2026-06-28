@@ -87,6 +87,9 @@ export interface RsTopWeekly {
   vol_ma_4?: number | null;
   vol_ma_13?: number | null;
   vol_ma_26?: number | null;
+  // 일봉 21/50 EMA 스냅샷 (미너비니 트레일링 손절선, 최근 금요일 as-of). RS86+ 종목만 값 존재.
+  ema_21?: number | null;
+  ema_50?: number | null;
 }
 
 export interface RsHistoryWeekly {

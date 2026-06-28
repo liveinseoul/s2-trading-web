@@ -40,3 +40,13 @@ alter table public.rs_universe_weekly
   add column if not exists price_ma_13  real,
   add column if not exists price_ma_26  real,
   add column if not exists price_ma_52  real;
+
+-- 일봉 21/50 EMA (미너비니 트레일링 손절선) 스냅샷 — 최근 금요일 as-of.
+--   엔진(17_90)과 동일식 ewm(span, adjust=False). RS86+ FTD 일봉캐시 보유 종목만 값 존재.
+--   주봉 이평(price_ma_*)과 달리 *일봉* 기준 — 보유 종목의 트레일링 손절 참고선.
+alter table public.rs_top_weekly
+  add column if not exists ema_21  real,
+  add column if not exists ema_50  real;
+alter table public.rs_universe_weekly
+  add column if not exists ema_21  real,
+  add column if not exists ema_50  real;

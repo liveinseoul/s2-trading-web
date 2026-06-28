@@ -119,7 +119,7 @@ export default async function RsTickerHistory({
     supabase
       .from("rs_top_weekly")
       .select(
-        "week_date,name,name_en,close,mktcap,price_ma_4,price_ma_13,price_ma_26,price_ma_52,vol_ma_4,vol_ma_13,vol_ma_26",
+        "week_date,name,name_en,close,mktcap,price_ma_4,price_ma_13,price_ma_26,price_ma_52,vol_ma_4,vol_ma_13,vol_ma_26,ema_21,ema_50",
       )
       .eq("market", market)
       .eq("ticker", ticker)
@@ -306,6 +306,34 @@ export default async function RsTickerHistory({
             </Section>
           )}
 
+          {maSnap?.ema_21 != null && (
+            <Section
+              title="일봉 트레일링 손절선 (21·50 EMA)"
+              sub={`미너비니 추적손절 기준선 — 일봉 EMA(주봉 아님). 수익 +20%↑→21EMA, +50%↑→50EMA 이탈 시 청산${
+                maSnap.week_date ? ` · ${maSnap.week_date} 금요일 종가 기준` : ""
+              }`}
+            >
+              <div className="grid grid-cols-1 gap-x-6 gap-y-0.5 text-sm sm:grid-cols-2">
+                <EmaCell
+                  label="21일 EMA"
+                  ema={maSnap.ema_21 ?? null}
+                  close={maSnap.close ?? null}
+                  market={market}
+                />
+                <EmaCell
+                  label="50일 EMA"
+                  ema={maSnap.ema_50 ?? null}
+                  close={maSnap.close ?? null}
+                  market={market}
+                />
+              </div>
+              <p className="mt-2 text-[11px] text-muted">
+                종가가 EMA 아래면 해당 트레일링 손절 가격을 이미 이탈한 상태입니다. RS86+ 종목만 일봉 EMA가
+                계산됩니다(그 외 종목은 표시 안 됨).
+              </p>
+            </Section>
+          )}
+
           <Section title="주차별 RS 추이" sub="막대 — RS96+ 진한 강조색 · 90~95 중간 강조색 · 89 이하 옅은 회색(관심 외)">
             <RsBars data={hist} market={market} />
             <div className="mt-2 flex justify-between text-[11px] text-muted">
@@ -402,6 +430,41 @@ function MaCell({ label, value }: { label: string; value: string }) {
     <div className="flex justify-between border-b border-[var(--color-borderc)] py-1">
       <span className="text-muted">{label}</span>
       <span className="tnum font-medium">{value}</span>
+    </div>
+  );
+}
+
+// 일봉 EMA 셀 — 값 + 종가 대비 위/아래(%) 배지. 종가<EMA(아래)면 손절선 이탈 → 적색.
+function EmaCell({
+  label,
+  ema,
+  close,
+  market,
+}: {
+  label: string;
+  ema: number | null;
+  close: number | null;
+  market: RsMarket;
+}) {
+  const gap = ema != null && ema > 0 && close != null ? (close / ema - 1) * 100 : null;
+  const above = gap != null && gap >= 0;
+  return (
+    <div className="flex items-center justify-between border-b border-[var(--color-borderc)] py-1">
+      <span className="text-muted">{label}</span>
+      <span className="flex items-center gap-2">
+        <span className="tnum font-medium">{fmtClose(ema, market)}</span>
+        {gap != null && (
+          <span
+            title={above ? "종가가 EMA 위 (트레일링 손절선 위)" : "종가가 EMA 아래 — 손절선 이탈"}
+            className={`rounded px-1.5 py-0.5 text-[11px] font-semibold tnum ${
+              above ? "bg-emerald-500/15 text-emerald-600" : "bg-red-500/70 text-white"
+            }`}
+          >
+            {above ? "위 +" : "아래 "}
+            {gap.toFixed(1)}%
+          </span>
+        )}
+      </span>
     </div>
   );
 }

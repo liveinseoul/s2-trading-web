@@ -321,6 +321,46 @@ def compute_threshold(week_ts, weekly_cache, mktcap_lookup, top_pct):
     return float(np.percentile(values, cutoff)), len(values)
 
 
+DAILY_CACHE_FILE = {"KR": "_kr_daily_cache.pkl",
+                    "US": "_us_daily_cache.pkl",
+                    "JP": "_jp_daily_cache.pkl"}
+
+
+def load_daily_cache(market):
+    """일봉 EMA 계산용 캐시 로드 — 각 시장 RS86+ FTD 일봉(매주 갱신, 현재시점).
+    파일 없으면 빈 dict → EMA 미적용(스냅샷에서 컬럼만 빠짐)."""
+    p = Path(QB_SCREEN_DIR) / DAILY_CACHE_FILE.get(market, "")
+    d = _load_pkl(p)
+    if not isinstance(d, dict):
+        print(f"  ⚠ {DAILY_CACHE_FILE.get(market)} 없음 → 일봉 EMA 미적용")
+        return {}
+    print(f"  일봉 캐시(EMA용): {len(d):,}개 종목 (RS86+ FTD, 현재시점)")
+    return d
+
+
+def build_daily_ema_lookup(daily_cache, weeks):
+    """일봉 21/50 EMA 를 주차(금요일) as-of 로 정렬.
+    반환 {ticker: {21: Series(idx=weeks), 50: Series(idx=weeks)}}.
+    엔진(17_90)과 동일식. 일봉 데이터 없는 종목(비RS86+)은 빠짐 → 스냅샷에서 None."""
+    try:
+        import rs_signal_cols as RSC
+    except Exception as e:
+        print(f"  ⚠ rs_signal_cols 로드 실패 — 일봉 EMA 생략: {e}")
+        return {}
+    widx = pd.DatetimeIndex(sorted(weeks))
+    out = {}
+    for tk, v in daily_cache.items():
+        c = get_close_series(v)
+        if c is None or len(c) < 21:
+            continue
+        try:
+            es = RSC.ema_daily_series(c)
+            out[tk] = {n: s.reindex(widx, method="ffill") for n, s in es.items()}
+        except Exception:
+            continue
+    return out
+
+
 def build_signal_lookup(raw_cache, weeks):
     """주차별 보조신호(align_weeks, climax_warn) as-of 조회용 사전계산.
     반환: {ticker: (aw_series, warn_series)} — 인덱스 weeks 로 ffill 정렬.
@@ -354,7 +394,7 @@ def build_signal_lookup(raw_cache, weeks):
 
 def extract_week(week_ts, market, rs_table, weekly_cache, ticker_names,
                  mktcap_lookup, mktcap_top, mktcap_min, names_en=None,
-                 signal_lookup=None):
+                 signal_lookup=None, ema_lookup=None):
     """한 주차 → (top96 후보, 모든 RS row, universe row).
 
     top96     : RS ≥ 96 AND (mktcap_top 컷오프 통과) AND (mktcap_min 통과)
@@ -408,6 +448,16 @@ def extract_week(week_ts, market, rs_table, weekly_cache, ticker_names,
                         x = sig[4][n].get(week_ts)
                         vma_val[n] = round(float(x), 0) if x is not None and not pd.isna(x) else None
 
+        # 일봉 21/50 EMA (미너비니 트레일링 기준선, 스냅샷) — RS86+ 종목만 가용
+        ema21_val = ema50_val = None
+        if ema_lookup is not None:
+            em = ema_lookup.get(tk)
+            if em is not None:
+                x = em[21].get(week_ts)
+                ema21_val = round(float(x), 2) if x is not None and not pd.isna(x) else None
+                x = em[50].get(week_ts)
+                ema50_val = round(float(x), 2) if x is not None and not pd.isna(x) else None
+
         all_rs_rows.append({
             "market": market,
             "ticker": tk,
@@ -451,6 +501,8 @@ def extract_week(week_ts, market, rs_table, weekly_cache, ticker_names,
             "price_ma_13": pma_val[13],
             "price_ma_26": pma_val[26],
             "price_ma_52": pma_val[52],
+            "ema_21": ema21_val,
+            "ema_50": ema50_val,
         })
 
         if rs < RS_MIN:
@@ -471,6 +523,7 @@ def extract_week(week_ts, market, rs_table, weekly_cache, ticker_names,
             "price_ma_4": pma_val[4], "price_ma_13": pma_val[13],
             "price_ma_26": pma_val[26], "price_ma_52": pma_val[52],
             "vol_ma_4": vma_val[4], "vol_ma_13": vma_val[13], "vol_ma_26": vma_val[26],
+            "ema_21": ema21_val, "ema_50": ema50_val,
         })
 
     top96_rows.sort(key=lambda r: (-r["rs"], -r["comp_return"]))
@@ -541,6 +594,10 @@ def fetch_market(market, weeks_back):
     signal_lookup = build_signal_lookup(raw_cache, weeks)
     print(f"  보조신호 사전계산: {len(signal_lookup):,}종목 (align_weeks · climax_warn)")
 
+    daily_cache = load_daily_cache(market)
+    ema_lookup = build_daily_ema_lookup(daily_cache, weeks)
+    print(f"  일봉 EMA 사전계산: {len(ema_lookup):,}종목 (21/50일 EMA, 금요일 as-of)")
+
     top96_all = []
     hist_by_ticker = {}
     rs96_tickers = set()
@@ -551,7 +608,8 @@ def fetch_market(market, weeks_back):
                                                ticker_names, mktcap_lookup,
                                                mktcap_top, mktcap_min,
                                                names_en=names_en_map,
-                                               signal_lookup=signal_lookup)
+                                               signal_lookup=signal_lookup,
+                                               ema_lookup=ema_lookup)
         top96_all.extend(top96)
         universe_all.extend(universe)
         for r in top96:
@@ -634,6 +692,13 @@ def upsert_supabase(top_rows, hist_rows, rs96_tickers_by_market, universe_rows=N
             for r in top_rows:
                 for k in _MA_COLS:
                     r.pop(k, None)
+    if top_rows and "ema_21" in top_rows[0]:
+        if not _columns_exist("rs_top_weekly", ["ema_21", "ema_50"]):
+            print("[supabase] rs_top_weekly 에 일봉 EMA(ema_21/ema_50) 컬럼 없음 "
+                  "— 이번엔 생략(ALTER 실행 후 다음 적재부터 표시)")
+            for r in top_rows:
+                r.pop("ema_21", None)
+                r.pop("ema_50", None)
     if hist_rows and "align_weeks" in hist_rows[0]:
         if not _columns_exist("rs_history_weekly", ["align_weeks", "vol_gap_4_26"]):
             print("[supabase] rs_history_weekly 에 align_weeks/vol_gap_4_26 컬럼 없음 "
@@ -651,6 +716,13 @@ def upsert_supabase(top_rows, hist_rows, rs96_tickers_by_market, universe_rows=N
                           "vol_ma_4", "vol_ma_13", "vol_ma_26",
                           "price_ma_4", "price_ma_13", "price_ma_26", "price_ma_52"):
                     r.pop(k, None)
+    if universe_rows and "ema_21" in universe_rows[0]:
+        if not _columns_exist("rs_universe_weekly", ["ema_21", "ema_50"]):
+            print("[supabase] rs_universe_weekly 에 일봉 EMA 컬럼 없음 "
+                  "— 이번엔 생략(ALTER 실행 후 다음 적재부터 표시)")
+            for r in universe_rows:
+                r.pop("ema_21", None)
+                r.pop("ema_50", None)
 
     # 시장 전체 삭제 후 재적재 — 옛 stale 주차(예: 월요일 timestamp) row 동시 정리.
     markets = set(rs96_tickers_by_market.keys()) | {r["market"] for r in top_rows}
